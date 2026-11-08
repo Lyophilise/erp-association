@@ -157,6 +157,7 @@ const MODULES = [
     { key: "docs", label: "Documents & gouvernance", ready: true },
   ]},
   { group: "Administration", items: [
+    { key: "tasks", label: "Tâches du bureau", ready: true },
     { key: "org_admin", label: "Organisation & invitations", ready: true, adminOnly: true },
   ]},
 ];
@@ -391,6 +392,7 @@ function renderView(){
   if (state.view === "shop") return renderShop(main);
   if (state.view === "docs") return renderDocs(main);
   if (state.view === "org_admin") return renderOrgAdmin(main);
+  if (state.view === "tasks") return renderTasks(main);
 }
 
 /* ---------------------------------------------------------------------
@@ -475,6 +477,7 @@ async function renderMembers(main){
         <div class="field"><label>Nom</label><input name="last_name" required></div>
         <div class="field"><label>Contact parent</label><input name="parent_name"></div>
         <div class="field"><label>Email parent</label><input name="parent_email" type="email"></div>
+        <div class="field"><label>Téléphone parent</label><input name="parent_phone" type="tel"></div>
         <div class="field" style="flex:2 1 260px"><label>Lien de paiement SumUp</label><input name="payment_link" type="url" placeholder="collé depuis l'appli SumUp Business"></div>
         <button class="btn btn-primary" type="submit">Ajouter</button>
       </form>
@@ -496,7 +499,7 @@ async function renderMembers(main){
               <td>
                 <select class="status-select" data-id="${m.id}">${statusOptions.replace(`value="${m.licence_status}"`, `value="${m.licence_status}" selected`)}</select>
               </td>
-              <td>${m.parent_name || ""} ${m.parent_email ? "· " + m.parent_email : ""}</td>
+              <td>${m.parent_name || ""} ${m.parent_email ? "· " + m.parent_email : ""} ${m.parent_phone ? "· " + m.parent_phone : ""}</td>
               <td>
                 ${m.payment_link ? `<a href="${m.payment_link}" target="_blank" class="btn btn-ghost btn-sm">Lien SumUp</a>` : ""}
                 <button class="btn btn-ghost btn-sm edit-link-btn" data-id="${m.id}" title="Modifier le lien">✎</button>
@@ -520,6 +523,7 @@ async function renderMembers(main){
       last_name: fd.get("last_name"),
       parent_name: fd.get("parent_name") || null,
       parent_email: fd.get("parent_email") || null,
+      parent_phone: fd.get("parent_phone") || null,
       payment_link: fd.get("payment_link") || null,
     };
     const { error } = await sb.from("members").insert(payload);
@@ -843,12 +847,13 @@ async function renderStaff(main){
 --------------------------------------------------------------------- */
 async function renderCalendar(main){
   main.innerHTML = `<div class="view-head"><h1>Calendrier, tournois & matériel</h1></div><div id="calendar-body">Chargement…</div>`;
-  const [{ data: cal, error: e1 }, { data: items, error: e2 }, { data: teams }, { data: convs }, { data: convPlayers }] = await Promise.all([
+  const [{ data: cal, error: e1 }, { data: items, error: e2 }, { data: teams }, { data: convs }, { data: convPlayers }, { data: rentals }] = await Promise.all([
     sb.from("calendar_events").select("*, teams(name)").eq("organization_id", state.orgId).order("start_at"),
     sb.from("equipment_items").select("*").eq("organization_id", state.orgId).order("name"),
     sb.from("teams").select("id, name").eq("organization_id", state.orgId).order("name"),
     sb.from("convocations").select("*").eq("organization_id", state.orgId),
     sb.from("convocation_players").select("*, members(first_name, last_name)").eq("organization_id", state.orgId),
+    sb.from("equipment_rentals").select("*, equipment_items(name)").eq("organization_id", state.orgId).order("start_date", { ascending: false }),
   ]);
   const body = document.getElementById("calendar-body");
   if (e1 || e2){ body.innerHTML = `<div class="auth-error">${(e1||e2).message}</div>`; return; }
@@ -864,7 +869,7 @@ async function renderCalendar(main){
       <form id="cal-form" class="form-grid">
         <div class="field"><label>Titre</label><input name="title" required></div>
         <div class="field"><label>Type</label>
-          <select name="type"><option value="match">Match</option><option value="tournoi">Tournoi</option><option value="reunion">Réunion</option><option value="ag">AG</option><option value="autre">Autre</option></select>
+          <select name="type"><option value="match">Match</option><option value="entrainement">Entraînement</option><option value="tournoi">Tournoi</option><option value="reunion">Réunion</option><option value="ag">AG</option><option value="autre">Autre</option></select>
         </div>
         <div class="field"><label>Équipe</label><select name="team_id"><option value="">—</option>${teamOptions}</select></div>
         <div class="field"><label>Date/heure</label><input name="start_at" type="datetime-local" required></div>
@@ -914,18 +919,59 @@ async function renderCalendar(main){
       <h3>Matériel (stock)</h3>
       <form id="equip-form" class="form-grid">
         <div class="field"><label>Nom</label><input name="name" required></div>
-        <div class="field"><label>Catégorie</label><input name="category" placeholder="ballons, tenues..."></div>
+        <div class="field"><label>Catégorie</label><input name="category" placeholder="ballons, tenues, tonnelles..."></div>
         <div class="field"><label>Quantité</label><input name="quantity" type="number" step="0.01" value="0"></div>
+        <div class="field"><label>Louable ?</label><select name="rentable"><option value="false">Non</option><option value="true">Oui</option></select></div>
+        <div class="field"><label>Tarif/jour (€)</label><input name="daily_rate" type="number" step="0.01" placeholder="si louable"></div>
         <button class="btn btn-primary" type="submit">Ajouter</button>
       </form>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Nom</th><th>Catégorie</th><th class="num">Quantité</th><th></th></tr></thead>
+          <thead><tr><th>Nom</th><th>Catégorie</th><th class="num">Quantité</th><th>Louable</th><th></th></tr></thead>
           <tbody>
             ${(items || []).length ? items.map(i => `
               <tr><td>${i.name}</td><td>${i.category || ""}</td><td class="num">${i.quantity}</td>
+              <td>${i.rentable ? `<span class="pill pill-ok">${Number(i.daily_rate||0).toFixed(2)} €/j</span>` : ""}</td>
               <td><button class="btn btn-ghost btn-sm del-equip-btn" data-id="${i.id}">🗑</button></td></tr>
-            `).join("") : `<tr class="empty-row"><td colspan="4">Aucun article pour l'instant.</td></tr>`}
+            `).join("") : `<tr class="empty-row"><td colspan="5">Aucun article pour l'instant.</td></tr>`}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Locations de matériel (tonnelles, etc.)</h3>
+      <form id="rental-form" class="form-grid">
+        <div class="field"><label>Article</label>
+          <select name="item_id">${(items || []).filter(i => i.rentable).map(i => `<option value="${i.id}" data-rate="${i.daily_rate||0}">${i.name}</option>`).join("")}</select>
+        </div>
+        <div class="field"><label>Locataire</label><input name="renter_name" required></div>
+        <div class="field"><label>Contact</label><input name="renter_contact"></div>
+        <div class="field"><label>Du</label><input name="start_date" type="date" required></div>
+        <div class="field"><label>Au</label><input name="end_date" type="date"></div>
+        <div class="field"><label>Prix (€)</label><input name="price" type="number" step="0.01"></div>
+        <div class="field"><label>Caution (€)</label><input name="deposit" type="number" step="0.01"></div>
+        <button class="btn btn-primary" type="submit">${(items||[]).some(i=>i.rentable) ? "Réserver" : "Marque un article comme louable d'abord"}</button>
+      </form>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Article</th><th>Locataire</th><th>Dates</th><th class="num">Prix</th><th>Statut</th><th>Payé</th><th></th></tr></thead>
+          <tbody>
+            ${(rentals || []).length ? rentals.map(r => `
+              <tr>
+                <td>${r.equipment_items?.name || ""}</td>
+                <td>${r.renter_name} ${r.renter_contact ? "· " + r.renter_contact : ""}</td>
+                <td>${r.start_date}${r.end_date ? " → " + r.end_date : ""}</td>
+                <td class="num">${r.price ? Number(r.price).toFixed(2) + " €" : ""}</td>
+                <td>
+                  <select class="rental-status-select" data-id="${r.id}">
+                    ${['reserve','en_cours','rendu'].map(s => `<option value="${s}" ${s===r.status?'selected':''}>${({reserve:'Réservé',en_cours:'En cours',rendu:'Rendu'})[s]}</option>`).join("")}
+                  </select>
+                </td>
+                <td>${r.paid ? '<span class="pill pill-ok">Payé</span>' : `<button class="btn btn-ghost btn-sm mark-paid-rental-btn" data-id="${r.id}" data-name="${r.renter_name}" data-price="${r.price||0}" data-item="${r.equipment_items?.name||''}">Marquer payé</button>`}</td>
+                <td><button class="btn btn-ghost btn-sm del-rental-btn" data-id="${r.id}">🗑</button></td>
+              </tr>
+            `).join("") : `<tr class="empty-row"><td colspan="7">Aucune location pour l'instant.</td></tr>`}
           </tbody>
         </table>
       </div>
@@ -954,9 +1000,64 @@ async function renderCalendar(main){
       name: fd.get("name"),
       category: fd.get("category") || null,
       quantity: Number(fd.get("quantity") || 0),
+      rentable: fd.get("rentable") === "true",
+      daily_rate: fd.get("daily_rate") ? Number(fd.get("daily_rate")) : null,
     });
     if (error) return alert(error.message);
     renderCalendar(main);
+  });
+
+  const rentalForm = document.getElementById("rental-form");
+  if (rentalForm) rentalForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    if (!fd.get("item_id")) return alert("Marque d'abord un article comme louable.");
+    const { error } = await sb.from("equipment_rentals").insert({
+      organization_id: state.orgId,
+      item_id: fd.get("item_id"),
+      renter_name: fd.get("renter_name"),
+      renter_contact: fd.get("renter_contact") || null,
+      start_date: fd.get("start_date"),
+      end_date: fd.get("end_date") || null,
+      price: fd.get("price") ? Number(fd.get("price")) : null,
+      deposit: fd.get("deposit") ? Number(fd.get("deposit")) : null,
+    });
+    if (error) return alert(error.message);
+    renderCalendar(main);
+  });
+
+  document.querySelectorAll(".rental-status-select").forEach(sel => {
+    sel.addEventListener("change", async () => {
+      const { error } = await sb.from("equipment_rentals").update({ status: sel.value }).eq("id", sel.dataset.id);
+      if (error) return alert(error.message);
+      renderCalendar(main);
+    });
+  });
+
+  document.querySelectorAll(".mark-paid-rental-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const { error } = await sb.from("equipment_rentals").update({ paid: true }).eq("id", btn.dataset.id);
+      if (error) return alert(error.message);
+      if (Number(btn.dataset.price) > 0){
+        await sb.from("finance_transactions").insert({
+          organization_id: state.orgId,
+          label: `Location ${btn.dataset.item} - ${btn.dataset.name}`,
+          category: "location_materiel",
+          type: "recette",
+          amount: Number(btn.dataset.price),
+        });
+      }
+      renderCalendar(main);
+    });
+  });
+
+  document.querySelectorAll(".del-rental-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      if (!confirm("Supprimer cette location ?")) return;
+      const { error } = await sb.from("equipment_rentals").delete().eq("id", btn.dataset.id);
+      if (error) return alert(error.message);
+      renderCalendar(main);
+    });
   });
 
   document.querySelectorAll(".del-cal-btn").forEach(btn => {
@@ -1513,6 +1614,78 @@ async function renderTournamentDetail(main, tournamentId){
       const { error } = await sb.from("tournament_matches").delete().eq("id", btn.dataset.id);
       if (error) return alert(error.message);
       renderTournamentDetail(main, tournamentId);
+    });
+  });
+}
+
+/* ---------------------------------------------------------------------
+   Module : Tâches du bureau (qui fait quoi)
+--------------------------------------------------------------------- */
+async function renderTasks(main){
+  main.innerHTML = `<div class="view-head"><h1>Tâches du bureau</h1></div><div id="tasks-body">Chargement…</div>`;
+  const { data, error } = await sb.from("tasks").select("*").eq("organization_id", state.orgId).order("due_date", { ascending: true, nullsFirst: false });
+  const body = document.getElementById("tasks-body");
+  if (error){ body.innerHTML = `<div class="auth-error">${error.message}</div>`; return; }
+
+  const statusLabel = { a_faire: "À faire", en_cours: "En cours", fait: "Fait" };
+
+  body.innerHTML = `
+    <div class="card">
+      <h3>Nouvelle tâche</h3>
+      <form id="task-form" class="form-grid">
+        <div class="field" style="flex:2 1 260px"><label>Tâche</label><input name="title" required placeholder="Trouver un trésorier, relancer les licences..."></div>
+        <div class="field"><label>Assignée à</label><input name="assigned_to" placeholder="nom ou e-mail"></div>
+        <div class="field"><label>Échéance</label><input name="due_date" type="date"></div>
+        <button class="btn btn-primary" type="submit">Ajouter</button>
+      </form>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Tâche</th><th>Assignée à</th><th>Échéance</th><th>Statut</th><th></th></tr></thead>
+        <tbody>
+          ${(data || []).length ? data.map(t => `
+            <tr>
+              <td>${t.title}</td>
+              <td>${t.assigned_to || ""}</td>
+              <td>${t.due_date || ""}</td>
+              <td>
+                <select class="task-status-select" data-id="${t.id}">
+                  ${Object.keys(statusLabel).map(s => `<option value="${s}" ${s===t.status?'selected':''}>${statusLabel[s]}</option>`).join("")}
+                </select>
+              </td>
+              <td><button class="btn btn-ghost btn-sm del-task-btn" data-id="${t.id}">🗑</button></td>
+            </tr>
+          `).join("") : `<tr class="empty-row"><td colspan="5">Aucune tâche pour l'instant.</td></tr>`}
+        </tbody>
+      </table>
+    </div>`;
+
+  document.getElementById("task-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const { error } = await sb.from("tasks").insert({
+      organization_id: state.orgId,
+      title: fd.get("title"),
+      assigned_to: fd.get("assigned_to") || null,
+      due_date: fd.get("due_date") || null,
+    });
+    if (error) return alert(error.message);
+    renderTasks(main);
+  });
+
+  document.querySelectorAll(".task-status-select").forEach(sel => {
+    sel.addEventListener("change", async () => {
+      const { error } = await sb.from("tasks").update({ status: sel.value }).eq("id", sel.dataset.id);
+      if (error) return alert(error.message);
+      renderTasks(main);
+    });
+  });
+
+  document.querySelectorAll(".del-task-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const { error } = await sb.from("tasks").delete().eq("id", btn.dataset.id);
+      if (error) return alert(error.message);
+      renderTasks(main);
     });
   });
 }
