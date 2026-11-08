@@ -4,32 +4,34 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ERP Association</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="https://stiren-cleguer.com/wp-content/uploads/logo_stiren_cleguer_350px.png-150x150.png">
+<meta name="theme-color" content="#2BAD6C">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Jost:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@500;600;700&family=Karla:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <style>
 /*
-  Palette neutre provisoire — à remplacer par l'identité visuelle réelle du club
-  (logo + couleurs) une fois fournie. Variables centralisées ici pour un
-  remplacement en un seul endroit.
+  Identité visuelle réelle du club (récupérée depuis stiren-cleguer.com) :
+  jaune #FCF305, vert #2BAD6C, police Rubik (titres) / Karla (texte).
 */
 :root{
-  --bg:#F5F6F5; --surface:#FFFFFF; --surface-2:#ECEEEC; --border:#DADFDC;
-  --fg:#1B1F1D; --fg-muted:#5C6660; --accent:#2B5B4A; --accent-2:#3F8068;
+  --bg:#F7F8F6; --surface:#FFFFFF; --surface-2:#EFF3EC; --border:#DCE3D8;
+  --fg:#15241B; --fg-muted:#5C6660; --accent:#2BAD6C; --accent-2:#249E60; --brand-yellow:#FCF305;
   --success:#2F7A4F; --success-bg:#E4F2E8; --warning:#A5680B; --warning-bg:#FBEFD9; --danger:#B3261E; --danger-bg:#FAE3E1;
-  --radius:12px; --font-display:'Jost',sans-serif; --font-body:'IBM Plex Sans',sans-serif; --font-mono:'IBM Plex Mono',monospace;
+  --radius:12px; --font-display:'Rubik',sans-serif; --font-body:'Karla',sans-serif; --font-mono:'IBM Plex Mono',monospace;
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
-    --bg:#10140F; --surface:#171D16; --surface-2:#1F271D; --border:#2A332A;
-    --fg:#EDF1EC; --fg-muted:#9AAA9B; --accent:#4FA383; --accent-2:#6FC4A0;
+    --bg:#10150F; --surface:#17201B; --surface-2:#1E2A22; --border:#2A362E;
+    --fg:#EDF2EC; --fg-muted:#9AAA9B; --accent:#4FCB8E; --accent-2:#6FDBA3; --brand-yellow:#FCF305;
     --success:#6FCB8E; --success-bg:#1C3327; --warning:#E3B35B; --warning-bg:#3A2E15; --danger:#F08A82; --danger-bg:#3A1E1B;
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"]{
-  --bg:#10140F; --surface:#171D16; --surface-2:#1F271D; --border:#2A332A;
-  --fg:#EDF1EC; --fg-muted:#9AAA9B; --accent:#4FA383; --accent-2:#6FC4A0;
+  --bg:#10150F; --surface:#17201B; --surface-2:#1E2A22; --border:#2A362E;
+  --fg:#EDF2EC; --fg-muted:#9AAA9B; --accent:#4FCB8E; --accent-2:#6FDBA3; --brand-yellow:#FCF305;
   --success:#6FCB8E; --success-bg:#1C3327; --warning:#E3B35B; --warning-bg:#3A2E15; --danger:#F08A82; --danger-bg:#3A1E1B;
   color-scheme: dark;
 }
@@ -45,7 +47,8 @@ a{color:var(--accent)}
 .app{display:flex;min-height:100%;width:100%}
 .sidebar{width:232px;flex:0 0 232px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:16px 10px;gap:2px;overflow-y:auto}
 .brand{display:flex;align-items:center;gap:10px;padding:4px 10px 18px}
-.brand-mark{width:30px;height:30px;border-radius:8px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:700;font-size:15px;flex:none}
+.brand-mark{width:30px;height:30px;border-radius:8px;background:var(--brand-yellow);display:flex;align-items:center;justify-content:center;flex:none;overflow:hidden}
+.brand-mark img{width:100%;height:100%;object-fit:contain}
 .brand-name{font-family:var(--font-display);font-weight:600;font-size:15px}
 .nav-group-label{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--fg-muted);padding:14px 12px 6px;opacity:.75}
 .nav-group:first-of-type .nav-group-label{padding-top:2px}
@@ -103,7 +106,8 @@ tbody tr:last-child td{border-bottom:none}
 
 .auth-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px 16px}
 .auth-card{width:100%;max-width:380px;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:32px 28px}
-.auth-mark{width:44px;height:44px;border-radius:12px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:700;font-size:20px;margin-bottom:16px}
+.auth-mark{width:44px;height:44px;border-radius:12px;background:var(--brand-yellow);display:flex;align-items:center;justify-content:center;margin-bottom:16px;overflow:hidden}
+.auth-mark img{width:100%;height:100%;object-fit:contain}
 .auth-card h1{font-size:21px;margin-bottom:4px}
 .auth-card p{color:var(--fg-muted);font-size:13px;margin-bottom:20px}
 .auth-field{margin-bottom:12px;display:flex;flex-direction:column;gap:4px}
@@ -150,6 +154,9 @@ const MODULES = [
     { key: "sponsors", label: "Partenaires & sponsoring", ready: true },
     { key: "shop", label: "Boutique", ready: true },
     { key: "docs", label: "Documents & gouvernance", ready: true },
+  ]},
+  { group: "Administration", items: [
+    { key: "org_admin", label: "Organisation & invitations", ready: true, adminOnly: true },
   ]},
 ];
 
@@ -202,8 +209,8 @@ function renderAuth(){
   root.innerHTML = `
     <div class="auth-wrap">
       <div class="auth-card">
-        <div class="auth-mark">A</div>
-        <h1>ERP Association</h1>
+        <div class="auth-mark"><img src="https://stiren-cleguer.com/wp-content/uploads/logo_stiren_cleguer_350px.png-150x150.png" alt="Logo"></div>
+        <h1>Stiren Cléguer</h1>
         <p>${isSignup ? "Créer un compte" : "Connexion à votre espace association"}</p>
         ${state.authError ? `<div class="auth-error">${state.authError}</div>` : ""}
         <form id="auth-form">
@@ -243,6 +250,13 @@ async function loadSession(){
 }
 
 async function loadMembership(){
+  const inviteToken = new URLSearchParams(location.search).get("invite");
+  if (inviteToken){
+    const { error } = await sb.rpc("accept_invite", { invite_token: inviteToken });
+    history.replaceState(null, "", location.pathname);
+    if (error) alert(`Invitation : ${error.message}`);
+  }
+
   const { data } = await sb
     .from("memberships")
     .select("role, organization_id, organizations(name)")
@@ -260,21 +274,26 @@ async function loadMembership(){
    Shell applicatif
 --------------------------------------------------------------------- */
 function renderApp(){
-  const navHtml = MODULES.map(group => `
+  const isAdmin = state.role === "president" || state.role === "bureau";
+  const navHtml = MODULES.map(group => {
+    const items = group.items.filter(it => !it.adminOnly || isAdmin);
+    if (!items.length) return "";
+    return `
     <div class="nav-group">
       <div class="nav-group-label">${group.group}</div>
-      ${group.items.map(it => `
+      ${items.map(it => `
         <button class="nav-btn ${state.view === it.key ? "active" : ""}" data-view="${it.key}">${it.label}</button>
       `).join("")}
     </div>
-  `).join("");
+  `;
+  }).join("");
 
   root.innerHTML = `
     <div class="app">
       <nav class="sidebar">
         <div class="brand">
-          <div class="brand-mark">A</div>
-          <div class="brand-name">ERP Association</div>
+          <div class="brand-mark"><img src="https://stiren-cleguer.com/wp-content/uploads/logo_stiren_cleguer_350px.png-150x150.png" alt="Logo"></div>
+          <div class="brand-name">Stiren Cléguer</div>
         </div>
         ${navHtml}
         <div class="nav-spacer"></div>
@@ -333,18 +352,28 @@ function renderView(){
   if (state.view === "sponsors") return renderSponsors(main);
   if (state.view === "shop") return renderShop(main);
   if (state.view === "docs") return renderDocs(main);
+  if (state.view === "org_admin") return renderOrgAdmin(main);
 }
 
 /* ---------------------------------------------------------------------
    Dashboard
 --------------------------------------------------------------------- */
 async function renderDashboard(main){
-  const { data: members } = await sb.from("members").select("licence_status").eq("organization_id", state.orgId);
-  const { data: tx } = await sb.from("finance_transactions").select("amount, type").eq("organization_id", state.orgId);
+  const [{ data: members }, { data: tx }, { data: vevents }, { data: signups }, { data: items }] = await Promise.all([
+    sb.from("members").select("id, first_name, last_name, licence_status").eq("organization_id", state.orgId),
+    sb.from("finance_transactions").select("amount, type").eq("organization_id", state.orgId),
+    sb.from("volunteer_events").select("*").eq("organization_id", state.orgId).gte("event_date", new Date().toISOString().slice(0,10)).order("event_date"),
+    sb.from("volunteer_signups").select("event_id").eq("organization_id", state.orgId),
+    sb.from("equipment_items").select("*").eq("organization_id", state.orgId),
+  ]);
 
   const total = members?.length || 0;
   const paid = members?.filter(m => m.licence_status === "payee").length || 0;
+  const unpaid = (members || []).filter(m => m.licence_status !== "payee");
   const solde = (tx || []).reduce((s, t) => s + (t.type === "recette" ? Number(t.amount) : -Number(t.amount)), 0);
+  const countSignups = eid => (signups || []).filter(s => s.event_id === eid).length;
+  const understaffed = (vevents || []).filter(e => countSignups(e.id) < e.slots_needed);
+  const lowStock = (items || []).filter(i => Number(i.quantity) <= 2);
 
   main.innerHTML = `
     <div class="view-head"><h1>Tableau de bord</h1><div class="view-sub">${state.orgName}</div></div>
@@ -352,11 +381,32 @@ async function renderDashboard(main){
       <div class="kpi"><div class="kpi-label">Licenciés</div><div class="kpi-value">${total}</div></div>
       <div class="kpi ${paid < total ? "warn" : "good"}"><div class="kpi-label">Licences payées</div><div class="kpi-value">${paid}/${total}</div></div>
       <div class="kpi ${solde < 0 ? "bad" : "good"}"><div class="kpi-label">Solde trésorerie</div><div class="kpi-value">${solde.toFixed(2)} €</div></div>
+      <div class="kpi ${understaffed.length ? "warn" : "good"}"><div class="kpi-label">Événements sous-staffés</div><div class="kpi-value">${understaffed.length}</div></div>
     </div>
-    <div class="card"><h3>Prochaines étapes</h3>
-      <p class="view-sub">Modules en cours de construction : encadrants &amp; bénévoles,
-      calendrier/tournois/matériel, communication, partenaires, boutique, documents.</p>
-    </div>`;
+
+    ${unpaid.length ? `
+    <div class="card">
+      <h3>Licences à relancer (${unpaid.length})</h3>
+      <div class="table-wrap"><table>
+        <tbody>${unpaid.map(m => `<tr><td>${m.first_name} ${m.last_name}</td><td>${m.licence_status}</td></tr>`).join("")}</tbody>
+      </table></div>
+    </div>` : ""}
+
+    ${understaffed.length ? `
+    <div class="card">
+      <h3>Événements à venir qui manquent de bénévoles</h3>
+      <div class="table-wrap"><table>
+        <tbody>${understaffed.map(e => `<tr><td>${e.event_date}</td><td>${e.title}</td><td class="num">${countSignups(e.id)} / ${e.slots_needed}</td></tr>`).join("")}</tbody>
+      </table></div>
+    </div>` : ""}
+
+    ${lowStock.length ? `
+    <div class="card">
+      <h3>Stock matériel bas</h3>
+      <div class="table-wrap"><table>
+        <tbody>${lowStock.map(i => `<tr><td>${i.name}</td><td class="num">${i.quantity} ${i.unit || ""}</td></tr>`).join("")}</tbody>
+      </table></div>
+    </div>` : ""}`;
 }
 
 /* ---------------------------------------------------------------------
@@ -376,6 +426,9 @@ async function renderMembers(main){
     a_faire: '<span class="pill pill-muted">À faire</span>',
   })[s] || s;
 
+  const statusOptions = ['a_faire','en_attente','payee','expiree']
+    .map(s => `<option value="${s}">${({a_faire:'À faire', en_attente:'En attente', payee:'Payée', expiree:'Expirée'})[s]}</option>`).join("");
+
   body.innerHTML = `
     <div class="card">
       <h3>Ajouter un licencié</h3>
@@ -390,16 +443,23 @@ async function renderMembers(main){
     </div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Nom</th><th>Prénom</th><th>Statut licence</th><th>Contact parent</th><th>Paiement</th></tr></thead>
+        <thead><tr><th>Nom</th><th>Prénom</th><th>Statut licence</th><th>Contact parent</th><th>Paiement</th><th></th></tr></thead>
         <tbody>
           ${state.members.length ? state.members.map(m => `
-            <tr>
+            <tr data-id="${m.id}">
               <td>${m.last_name}</td>
               <td>${m.first_name}</td>
-              <td>${statusPill(m.licence_status)}</td>
+              <td>
+                <select class="status-select" data-id="${m.id}">${statusOptions.replace(`value="${m.licence_status}"`, `value="${m.licence_status}" selected`)}</select>
+              </td>
               <td>${m.parent_name || ""} ${m.parent_email ? "· " + m.parent_email : ""}</td>
-              <td>${m.payment_link ? `<a href="${m.payment_link}" target="_blank" class="btn btn-ghost btn-sm">Lien SumUp</a>` : ""}</td>
-            </tr>`).join("") : `<tr class="empty-row"><td colspan="5">Aucun licencié pour l'instant.</td></tr>`}
+              <td>
+                ${m.payment_link ? `<a href="${m.payment_link}" target="_blank" class="btn btn-ghost btn-sm">Lien SumUp</a>` : ""}
+                <button class="btn btn-ghost btn-sm edit-link-btn" data-id="${m.id}" title="Modifier le lien">✎</button>
+                ${m.licence_status !== 'payee' ? `<button class="btn btn-ghost btn-sm relance-btn" data-id="${m.id}" data-name="${m.first_name} ${m.last_name}">Relancer</button>` : ""}
+              </td>
+              <td><button class="btn btn-ghost btn-sm delete-member-btn" data-id="${m.id}">🗑</button></td>
+            </tr>`).join("") : `<tr class="empty-row"><td colspan="6">Aucun licencié pour l'instant.</td></tr>`}
         </tbody>
       </table>
     </div>`;
@@ -418,6 +478,48 @@ async function renderMembers(main){
     const { error } = await sb.from("members").insert(payload);
     if (error) return alert(error.message);
     renderMembers(main);
+  });
+
+  document.querySelectorAll(".status-select").forEach(sel => {
+    sel.addEventListener("change", async () => {
+      const { error } = await sb.from("members").update({ licence_status: sel.value }).eq("id", sel.dataset.id);
+      if (error) return alert(error.message);
+      renderMembers(main);
+    });
+  });
+
+  document.querySelectorAll(".edit-link-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const current = state.members.find(m => m.id === btn.dataset.id)?.payment_link || "";
+      const url = prompt("Lien de paiement SumUp :", current);
+      if (url === null) return;
+      const { error } = await sb.from("members").update({ payment_link: url || null }).eq("id", btn.dataset.id);
+      if (error) return alert(error.message);
+      renderMembers(main);
+    });
+  });
+
+  document.querySelectorAll(".delete-member-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      if (!confirm("Supprimer ce licencié ?")) return;
+      const { error } = await sb.from("members").delete().eq("id", btn.dataset.id);
+      if (error) return alert(error.message);
+      renderMembers(main);
+    });
+  });
+
+  document.querySelectorAll(".relance-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const { error } = await sb.from("communications").insert({
+        organization_id: state.orgId,
+        type: "relance",
+        subject: `Relance licence - ${btn.dataset.name}`,
+        recipients_count: 1,
+        sent_at: new Date().toISOString(),
+      });
+      if (error) return alert(error.message);
+      alert("Relance enregistrée (visible dans Communication).");
+    });
   });
 }
 
@@ -450,7 +552,7 @@ async function renderFinance(main){
     </div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Date</th><th>Libellé</th><th>Catégorie</th><th>Type</th><th class="num">Montant</th></tr></thead>
+        <thead><tr><th>Date</th><th>Libellé</th><th>Catégorie</th><th>Type</th><th class="num">Montant</th><th></th></tr></thead>
         <tbody>
           ${state.finance.length ? state.finance.map(t => `
             <tr>
@@ -459,7 +561,8 @@ async function renderFinance(main){
               <td>${t.category || ""}</td>
               <td>${t.type === "recette" ? '<span class="pill pill-ok">Recette</span>' : '<span class="pill pill-bad">Dépense</span>'}</td>
               <td class="num">${Number(t.amount).toFixed(2)} €</td>
-            </tr>`).join("") : `<tr class="empty-row"><td colspan="5">Aucune transaction.</td></tr>`}
+              <td><button class="btn btn-ghost btn-sm delete-tx-btn" data-id="${t.id}">🗑</button></td>
+            </tr>`).join("") : `<tr class="empty-row"><td colspan="6">Aucune transaction.</td></tr>`}
         </tbody>
       </table>
     </div>`;
@@ -478,6 +581,15 @@ async function renderFinance(main){
     if (error) return alert(error.message);
     renderFinance(main);
   });
+
+  document.querySelectorAll(".delete-tx-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      if (!confirm("Supprimer cette transaction ?")) return;
+      const { error } = await sb.from("finance_transactions").delete().eq("id", btn.dataset.id);
+      if (error) return alert(error.message);
+      renderFinance(main);
+    });
+  });
 }
 
 /* ---------------------------------------------------------------------
@@ -489,12 +601,13 @@ async function renderStaff(main){
     sb.from("team_staff").select("*, teams(name)").eq("organization_id", state.orgId),
     sb.from("teams").select("id, name").eq("organization_id", state.orgId).order("name"),
     sb.from("volunteer_events").select("*").eq("organization_id", state.orgId).order("event_date"),
-    sb.from("volunteer_signups").select("event_id"),
+    sb.from("volunteer_signups").select("*").eq("organization_id", state.orgId),
   ]);
   const body = document.getElementById("staff-body");
   if (e1 || e2){ body.innerHTML = `<div class="auth-error">${(e1||e2).message}</div>`; return; }
 
-  const countSignups = eid => (signups || []).filter(s => s.event_id === eid).length;
+  const signupsFor = eid => (signups || []).filter(s => s.event_id === eid);
+  const countSignups = eid => signupsFor(eid).length;
   const teamOptions = (teams || []).map(t => `<option value="${t.id}">${t.name}</option>`).join("");
 
   body.innerHTML = `
@@ -521,7 +634,7 @@ async function renderStaff(main){
     </div>
 
     <div class="card">
-      <h3>Mobilisation bénévole (matchs, tournois, AG...)</h3>
+      <h3>Nouvel événement à mobiliser</h3>
       <form id="event-form" class="form-grid">
         <div class="field"><label>Titre</label><input name="title" required></div>
         <div class="field"><label>Type</label>
@@ -531,20 +644,36 @@ async function renderStaff(main){
         <div class="field"><label>Bénévoles requis</label><input name="slots_needed" type="number" value="0"></div>
         <button class="btn btn-primary" type="submit">Ajouter</button>
       </form>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Date</th><th>Titre</th><th>Type</th><th class="num">Inscrits / requis</th></tr></thead>
-          <tbody>
-            ${(events || []).length ? events.map(e => `
-              <tr>
-                <td>${e.event_date}</td><td>${e.title}</td><td>${e.type}</td>
-                <td class="num">${countSignups(e.id)} / ${e.slots_needed}</td>
-              </tr>
-            `).join("") : `<tr class="empty-row"><td colspan="4">Aucun événement pour l'instant.</td></tr>`}
-          </tbody>
-        </table>
-      </div>
-    </div>`;
+    </div>
+
+    <h3 style="margin-bottom:12px">Mobilisation par événement</h3>
+    ${(events || []).length ? events.map(e => {
+      const su = signupsFor(e.id);
+      const short = su.length < e.slots_needed;
+      return `
+      <div class="card">
+        <div class="card-row">
+          <div><strong>${e.title}</strong> — ${e.type} · ${e.event_date}</div>
+          <span class="pill ${short ? 'pill-warn' : 'pill-ok'}">${su.length} / ${e.slots_needed} bénévole(s)</span>
+        </div>
+        <div class="table-wrap" style="margin-bottom:10px">
+          <table>
+            <thead><tr><th>Nom</th><th>Rôle</th><th></th></tr></thead>
+            <tbody>
+              ${su.length ? su.map(s => `
+                <tr><td>${s.display_name || ""}</td><td>${s.role || ""}</td>
+                <td><button class="btn btn-ghost btn-sm del-signup-btn" data-id="${s.id}">🗑</button></td></tr>
+              `).join("") : `<tr class="empty-row"><td colspan="3">Aucun bénévole inscrit.</td></tr>`}
+            </tbody>
+          </table>
+        </div>
+        <form class="signup-form form-grid" data-event="${e.id}">
+          <div class="field"><label>Nom</label><input name="display_name" required></div>
+          <div class="field"><label>Rôle</label><input name="role" placeholder="buvette, arbitrage, rangement..."></div>
+          <button class="btn btn-ghost btn-sm" type="submit">S'inscrire</button>
+        </form>
+      </div>`;
+    }).join("") : `<div class="placeholder-card">Aucun événement pour l'instant.</div>`}`;
 
   document.getElementById("staff-form").addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -571,6 +700,29 @@ async function renderStaff(main){
     });
     if (error) return alert(error.message);
     renderStaff(main);
+  });
+
+  document.querySelectorAll(".signup-form").forEach(form => {
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const { error } = await sb.from("volunteer_signups").insert({
+        organization_id: state.orgId,
+        event_id: form.dataset.event,
+        display_name: fd.get("display_name"),
+        role: fd.get("role") || null,
+      });
+      if (error) return alert(error.message);
+      renderStaff(main);
+    });
+  });
+
+  document.querySelectorAll(".del-signup-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const { error } = await sb.from("volunteer_signups").delete().eq("id", btn.dataset.id);
+      if (error) return alert(error.message);
+      renderStaff(main);
+    });
   });
 }
 
@@ -859,6 +1011,69 @@ async function renderDocs(main){
 }
 
 /* ---------------------------------------------------------------------
+   Module : Organisation & invitations
+--------------------------------------------------------------------- */
+async function renderOrgAdmin(main){
+  main.innerHTML = `<div class="view-head"><h1>Organisation & invitations</h1></div><div id="org-body">Chargement…</div>`;
+  const { data, error } = await sb.from("invites").select("*").eq("organization_id", state.orgId).order("created_at", { ascending: false });
+  const body = document.getElementById("org-body");
+  if (error){ body.innerHTML = `<div class="auth-error">${error.message}</div>`; return; }
+
+  const roleLabel = { president:'Président', bureau:'Bureau', tresorier:'Trésorier', secretaire:'Secrétaire', coach:'Coach', benevole:'Bénévole', membre:'Membre' };
+  const roleOptions = Object.keys(roleLabel).map(r => `<option value="${r}">${roleLabel[r]}</option>`).join("");
+
+  body.innerHTML = `
+    <div class="card">
+      <h3>Inviter quelqu'un</h3>
+      <p class="view-sub">Pas d'envoi d'e-mail automatique pour l'instant : un lien est généré, à toi de le transmettre (WhatsApp, e-mail...). La personne clique, se crée un compte (ou se connecte) avec <strong>le même e-mail</strong>, et elle est rattachée automatiquement.</p>
+      <form id="invite-form" class="form-grid">
+        <div class="field"><label>E-mail</label><input name="email" type="email" required></div>
+        <div class="field"><label>Rôle</label><select name="role">${roleOptions}</select></div>
+        <button class="btn btn-primary" type="submit">Générer le lien</button>
+      </form>
+      <div id="invite-result"></div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>E-mail</th><th>Rôle</th><th>Statut</th><th></th></tr></thead>
+        <tbody>
+          ${(data || []).length ? data.map(i => `
+            <tr>
+              <td>${i.email}</td>
+              <td>${roleLabel[i.role] || i.role}</td>
+              <td>${i.accepted_at ? '<span class="pill pill-ok">Acceptée</span>' : '<span class="pill pill-warn">En attente</span>'}</td>
+              <td>${i.accepted_at ? "" : `<button class="btn btn-ghost btn-sm copy-invite-btn" data-token="${i.token}">Copier le lien</button>`}</td>
+            </tr>
+          `).join("") : `<tr class="empty-row"><td colspan="4">Aucune invitation pour l'instant.</td></tr>`}
+        </tbody>
+      </table>
+    </div>`;
+
+  document.getElementById("invite-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const { data: inv, error } = await sb.from("invites").insert({
+      organization_id: state.orgId,
+      email: fd.get("email"),
+      role: fd.get("role"),
+    }).select().single();
+    if (error) return alert(error.message);
+    const link = `${location.origin}${location.pathname}?invite=${inv.token}`;
+    document.getElementById("invite-result").innerHTML = `
+      <div class="auth-msg">Lien généré : <a href="${link}">${link}</a></div>`;
+    renderOrgAdmin(main);
+  });
+
+  document.querySelectorAll(".copy-invite-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const link = `${location.origin}${location.pathname}?invite=${btn.dataset.token}`;
+      navigator.clipboard?.writeText(link).catch(() => {});
+      alert(`Lien copié :\n${link}`);
+    });
+  });
+}
+
+/* ---------------------------------------------------------------------
    Bootstrap
 --------------------------------------------------------------------- */
 (async function init(){
@@ -869,6 +1084,9 @@ async function renderDocs(main){
       state.session = session;
       if (session) loadMembership().then(render); else render();
     });
+  }
+  if ("serviceWorker" in navigator){
+    navigator.serviceWorker.register("service-worker.js").catch(() => {});
   }
 })();
 </script>

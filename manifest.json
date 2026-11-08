@@ -1,0 +1,23 @@
+{
+  "name": "Stiren Cléguer - ERP Association",
+  "short_name": "Stiren Cléguer",
+  "description": "Gestion interne du club : licences, trésorerie, bénévoles, calendrier...",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#F7F8F6",
+  "theme_color": "#2BAD6C",
+  "lang": "fr",
+  "icons": [
+    {
+      "src": "https://stiren-cleguer.com/wp-content/uploads/logo_stiren_cleguer_350px.png-150x150.png",
+      "sizes": "150x150",
+      "type": "image/png"
+    },
+    {
+      "src": "https://stiren-cleguer.com/wp-content/uploads/logo_stiren_cleguer_350px.png-300x300.png",
+      "sizes": "300x300",
+      "type": "image/png"
+    }
+  ]
+}
