@@ -142,20 +142,14 @@ const MODULES = [
   { group: "Vie associative", items: [
     { key: "members", label: "Licences & effectifs", ready: true },
     { key: "finance", label: "Trésorerie", ready: true },
-    { key: "staff", label: "Encadrants & bénévoles", ready: false,
-      desc: "Rôles coachs/dirigeants, planning, mobilisation sur les événements." },
-    { key: "calendar", label: "Calendrier, tournois & matériel", ready: false,
-      desc: "Matchs, tournois, engagement des places, stock/commandes d'équipements." },
+    { key: "staff", label: "Encadrants & bénévoles", ready: true },
+    { key: "calendar", label: "Calendrier, tournois & matériel", ready: true },
   ]},
   { group: "Communication & partenaires", items: [
-    { key: "comms", label: "Communication", ready: false,
-      desc: "Convocations, relances licences, newsletters." },
-    { key: "sponsors", label: "Partenaires & sponsoring", ready: false,
-      desc: "Sponsors, contrats, contreparties (panneaux, maillots...)." },
-    { key: "shop", label: "Boutique", ready: false,
-      desc: "Produits, commandes (merchandising, buvette...)." },
-    { key: "docs", label: "Documents & gouvernance", ready: false,
-      desc: "PV de réunion, statuts, règlements." },
+    { key: "comms", label: "Communication", ready: true },
+    { key: "sponsors", label: "Partenaires & sponsoring", ready: true },
+    { key: "shop", label: "Boutique", ready: true },
+    { key: "docs", label: "Documents & gouvernance", ready: true },
   ]},
 ];
 
@@ -333,6 +327,12 @@ function renderView(){
   if (state.view === "dashboard") return renderDashboard(main);
   if (state.view === "members") return renderMembers(main);
   if (state.view === "finance") return renderFinance(main);
+  if (state.view === "staff") return renderStaff(main);
+  if (state.view === "calendar") return renderCalendar(main);
+  if (state.view === "comms") return renderComms(main);
+  if (state.view === "sponsors") return renderSponsors(main);
+  if (state.view === "shop") return renderShop(main);
+  if (state.view === "docs") return renderDocs(main);
 }
 
 /* ---------------------------------------------------------------------
@@ -474,6 +474,384 @@ async function renderFinance(main){
     const { error } = await sb.from("finance_transactions").insert(payload);
     if (error) return alert(error.message);
     renderFinance(main);
+  });
+}
+
+/* ---------------------------------------------------------------------
+   Module : Encadrants & bénévoles
+--------------------------------------------------------------------- */
+async function renderStaff(main){
+  main.innerHTML = `<div class="view-head"><h1>Encadrants & bénévoles</h1></div><div id="staff-body">Chargement…</div>`;
+  const [{ data: staff, error: e1 }, { data: teams }, { data: events, error: e2 }, { data: signups }] = await Promise.all([
+    sb.from("team_staff").select("*, teams(name)").eq("organization_id", state.orgId),
+    sb.from("teams").select("id, name").eq("organization_id", state.orgId).order("name"),
+    sb.from("volunteer_events").select("*").eq("organization_id", state.orgId).order("event_date"),
+    sb.from("volunteer_signups").select("event_id"),
+  ]);
+  const body = document.getElementById("staff-body");
+  if (e1 || e2){ body.innerHTML = `<div class="auth-error">${(e1||e2).message}</div>`; return; }
+
+  const countSignups = eid => (signups || []).filter(s => s.event_id === eid).length;
+  const teamOptions = (teams || []).map(t => `<option value="${t.id}">${t.name}</option>`).join("");
+
+  body.innerHTML = `
+    <div class="card">
+      <h3>Encadrants (coachs / dirigeants)</h3>
+      <form id="staff-form" class="form-grid">
+        <div class="field"><label>Nom</label><input name="display_name" required></div>
+        <div class="field"><label>Équipe</label><select name="team_id">${teamOptions}</select></div>
+        <div class="field"><label>Rôle</label>
+          <select name="role"><option value="coach">Coach</option><option value="dirigeant">Dirigeant</option><option value="arbitre">Arbitre</option></select>
+        </div>
+        <button class="btn btn-primary" type="submit">Ajouter</button>
+      </form>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Nom</th><th>Équipe</th><th>Rôle</th></tr></thead>
+          <tbody>
+            ${(staff || []).length ? staff.map(s => `
+              <tr><td>${s.display_name || ""}</td><td>${s.teams?.name || ""}</td><td>${s.role}</td></tr>
+            `).join("") : `<tr class="empty-row"><td colspan="3">Aucun encadrant pour l'instant.</td></tr>`}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Mobilisation bénévole (matchs, tournois, AG...)</h3>
+      <form id="event-form" class="form-grid">
+        <div class="field"><label>Titre</label><input name="title" required></div>
+        <div class="field"><label>Type</label>
+          <select name="type"><option value="tournoi">Tournoi</option><option value="match">Match</option><option value="ag">AG</option><option value="reunion">Réunion</option><option value="autre">Autre</option></select>
+        </div>
+        <div class="field"><label>Date</label><input name="event_date" type="date" required></div>
+        <div class="field"><label>Bénévoles requis</label><input name="slots_needed" type="number" value="0"></div>
+        <button class="btn btn-primary" type="submit">Ajouter</button>
+      </form>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Date</th><th>Titre</th><th>Type</th><th class="num">Inscrits / requis</th></tr></thead>
+          <tbody>
+            ${(events || []).length ? events.map(e => `
+              <tr>
+                <td>${e.event_date}</td><td>${e.title}</td><td>${e.type}</td>
+                <td class="num">${countSignups(e.id)} / ${e.slots_needed}</td>
+              </tr>
+            `).join("") : `<tr class="empty-row"><td colspan="4">Aucun événement pour l'instant.</td></tr>`}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+
+  document.getElementById("staff-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const { error } = await sb.from("team_staff").insert({
+      organization_id: state.orgId,
+      team_id: fd.get("team_id") || null,
+      display_name: fd.get("display_name"),
+      role: fd.get("role"),
+    });
+    if (error) return alert(error.message);
+    renderStaff(main);
+  });
+
+  document.getElementById("event-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const { error } = await sb.from("volunteer_events").insert({
+      organization_id: state.orgId,
+      title: fd.get("title"),
+      type: fd.get("type"),
+      event_date: fd.get("event_date"),
+      slots_needed: Number(fd.get("slots_needed") || 0),
+    });
+    if (error) return alert(error.message);
+    renderStaff(main);
+  });
+}
+
+/* ---------------------------------------------------------------------
+   Module : Calendrier, tournois & matériel
+--------------------------------------------------------------------- */
+async function renderCalendar(main){
+  main.innerHTML = `<div class="view-head"><h1>Calendrier, tournois & matériel</h1></div><div id="calendar-body">Chargement…</div>`;
+  const [{ data: cal, error: e1 }, { data: items, error: e2 }] = await Promise.all([
+    sb.from("calendar_events").select("*").eq("organization_id", state.orgId).order("start_at"),
+    sb.from("equipment_items").select("*").eq("organization_id", state.orgId).order("name"),
+  ]);
+  const body = document.getElementById("calendar-body");
+  if (e1 || e2){ body.innerHTML = `<div class="auth-error">${(e1||e2).message}</div>`; return; }
+
+  body.innerHTML = `
+    <div class="card">
+      <h3>Calendrier (matchs, tournois, réunions...)</h3>
+      <div class="view-sub" style="margin-bottom:10px">Les tableaux/poules de tournoi façon Tournify ne sont pas encore implémentés — pour l'instant chaque tournoi est juste un événement daté.</div>
+      <form id="cal-form" class="form-grid">
+        <div class="field"><label>Titre</label><input name="title" required></div>
+        <div class="field"><label>Type</label>
+          <select name="type"><option value="match">Match</option><option value="tournoi">Tournoi</option><option value="reunion">Réunion</option><option value="ag">AG</option><option value="autre">Autre</option></select>
+        </div>
+        <div class="field"><label>Date/heure</label><input name="start_at" type="datetime-local" required></div>
+        <div class="field"><label>Lieu</label><input name="location"></div>
+        <button class="btn btn-primary" type="submit">Ajouter</button>
+      </form>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Date</th><th>Titre</th><th>Type</th><th>Lieu</th></tr></thead>
+          <tbody>
+            ${(cal || []).length ? cal.map(c => `
+              <tr><td>${new Date(c.start_at).toLocaleString('fr-FR')}</td><td>${c.title}</td><td>${c.type}</td><td>${c.location || ""}</td></tr>
+            `).join("") : `<tr class="empty-row"><td colspan="4">Aucun événement pour l'instant.</td></tr>`}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Matériel (stock)</h3>
+      <form id="equip-form" class="form-grid">
+        <div class="field"><label>Nom</label><input name="name" required></div>
+        <div class="field"><label>Catégorie</label><input name="category" placeholder="ballons, tenues..."></div>
+        <div class="field"><label>Quantité</label><input name="quantity" type="number" step="0.01" value="0"></div>
+        <button class="btn btn-primary" type="submit">Ajouter</button>
+      </form>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Nom</th><th>Catégorie</th><th class="num">Quantité</th></tr></thead>
+          <tbody>
+            ${(items || []).length ? items.map(i => `
+              <tr><td>${i.name}</td><td>${i.category || ""}</td><td class="num">${i.quantity}</td></tr>
+            `).join("") : `<tr class="empty-row"><td colspan="3">Aucun article pour l'instant.</td></tr>`}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+
+  document.getElementById("cal-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const { error } = await sb.from("calendar_events").insert({
+      organization_id: state.orgId,
+      title: fd.get("title"),
+      type: fd.get("type"),
+      start_at: new Date(fd.get("start_at")).toISOString(),
+      location: fd.get("location") || null,
+    });
+    if (error) return alert(error.message);
+    renderCalendar(main);
+  });
+
+  document.getElementById("equip-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const { error } = await sb.from("equipment_items").insert({
+      organization_id: state.orgId,
+      name: fd.get("name"),
+      category: fd.get("category") || null,
+      quantity: Number(fd.get("quantity") || 0),
+    });
+    if (error) return alert(error.message);
+    renderCalendar(main);
+  });
+}
+
+/* ---------------------------------------------------------------------
+   Module : Communication
+--------------------------------------------------------------------- */
+async function renderComms(main){
+  main.innerHTML = `<div class="view-head"><h1>Communication</h1></div><div id="comms-body">Chargement…</div>`;
+  const { data, error } = await sb.from("communications").select("*").eq("organization_id", state.orgId).order("sent_at", { ascending: false, nullsFirst: true });
+  const body = document.getElementById("comms-body");
+  if (error){ body.innerHTML = `<div class="auth-error">${error.message}</div>`; return; }
+
+  body.innerHTML = `
+    <div class="card">
+      <h3>Nouvelle communication</h3>
+      <div class="view-sub" style="margin-bottom:10px">Pour l'instant ça enregistre le contenu, l'envoi réel (mail/SMS) n'est pas encore branché.</div>
+      <form id="comms-form" class="form-grid">
+        <div class="field"><label>Type</label>
+          <select name="type"><option value="convocation">Convocation</option><option value="relance">Relance</option><option value="newsletter">Newsletter</option><option value="autre">Autre</option></select>
+        </div>
+        <div class="field" style="flex:2 1 260px"><label>Sujet</label><input name="subject" required></div>
+        <button class="btn btn-primary" type="submit">Enregistrer</button>
+      </form>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Type</th><th>Sujet</th><th>Destinataires</th></tr></thead>
+        <tbody>
+          ${(data || []).length ? data.map(c => `
+            <tr><td>${c.type}</td><td>${c.subject}</td><td class="num">${c.recipients_count || 0}</td></tr>
+          `).join("") : `<tr class="empty-row"><td colspan="3">Aucune communication pour l'instant.</td></tr>`}
+        </tbody>
+      </table>
+    </div>`;
+
+  document.getElementById("comms-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const { error } = await sb.from("communications").insert({
+      organization_id: state.orgId,
+      type: fd.get("type"),
+      subject: fd.get("subject"),
+    });
+    if (error) return alert(error.message);
+    renderComms(main);
+  });
+}
+
+/* ---------------------------------------------------------------------
+   Module : Partenaires & sponsoring
+--------------------------------------------------------------------- */
+async function renderSponsors(main){
+  main.innerHTML = `<div class="view-head"><h1>Partenaires & sponsoring</h1></div><div id="sponsors-body">Chargement…</div>`;
+  const { data, error } = await sb.from("sponsors").select("*").eq("organization_id", state.orgId).order("name");
+  const body = document.getElementById("sponsors-body");
+  if (error){ body.innerHTML = `<div class="auth-error">${error.message}</div>`; return; }
+
+  body.innerHTML = `
+    <div class="card">
+      <h3>Ajouter un partenaire</h3>
+      <form id="sponsor-form" class="form-grid">
+        <div class="field"><label>Nom</label><input name="name" required></div>
+        <div class="field"><label>Contact</label><input name="contact_name"></div>
+        <div class="field"><label>Montant contrat (€)</label><input name="contract_amount" type="number" step="0.01"></div>
+        <div class="field" style="flex:2 1 260px"><label>Contrepartie</label><input name="benefits_text" placeholder="panneau, maillot..."></div>
+        <button class="btn btn-primary" type="submit">Ajouter</button>
+      </form>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Nom</th><th>Contact</th><th class="num">Montant</th><th>Contrepartie</th></tr></thead>
+        <tbody>
+          ${(data || []).length ? data.map(s => `
+            <tr><td>${s.name}</td><td>${s.contact_name || ""}</td><td class="num">${s.contract_amount ? Number(s.contract_amount).toFixed(2) + " €" : ""}</td><td>${s.benefits_text || ""}</td></tr>
+          `).join("") : `<tr class="empty-row"><td colspan="4">Aucun partenaire pour l'instant.</td></tr>`}
+        </tbody>
+      </table>
+    </div>`;
+
+  document.getElementById("sponsor-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const { error } = await sb.from("sponsors").insert({
+      organization_id: state.orgId,
+      name: fd.get("name"),
+      contact_name: fd.get("contact_name") || null,
+      contract_amount: fd.get("contract_amount") ? Number(fd.get("contract_amount")) : null,
+      benefits_text: fd.get("benefits_text") || null,
+    });
+    if (error) return alert(error.message);
+    renderSponsors(main);
+  });
+}
+
+/* ---------------------------------------------------------------------
+   Module : Boutique
+--------------------------------------------------------------------- */
+async function renderShop(main){
+  main.innerHTML = `<div class="view-head"><h1>Boutique</h1></div><div id="shop-body">Chargement…</div>`;
+  const [{ data: products, error: e1 }, { data: orders, error: e2 }] = await Promise.all([
+    sb.from("shop_products").select("*").eq("organization_id", state.orgId).order("name"),
+    sb.from("shop_orders").select("*").eq("organization_id", state.orgId).order("order_date", { ascending: false }),
+  ]);
+  const body = document.getElementById("shop-body");
+  if (e1 || e2){ body.innerHTML = `<div class="auth-error">${(e1||e2).message}</div>`; return; }
+
+  body.innerHTML = `
+    <div class="card">
+      <h3>Produits</h3>
+      <form id="product-form" class="form-grid">
+        <div class="field"><label>Nom</label><input name="name" required></div>
+        <div class="field"><label>Prix (€)</label><input name="price" type="number" step="0.01" required></div>
+        <div class="field"><label>Stock</label><input name="stock" type="number" step="1" value="0"></div>
+        <button class="btn btn-primary" type="submit">Ajouter</button>
+      </form>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Nom</th><th class="num">Prix</th><th class="num">Stock</th></tr></thead>
+          <tbody>
+            ${(products || []).length ? products.map(p => `
+              <tr><td>${p.name}</td><td class="num">${Number(p.price).toFixed(2)} €</td><td class="num">${p.stock}</td></tr>
+            `).join("") : `<tr class="empty-row"><td colspan="3">Aucun produit pour l'instant.</td></tr>`}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Commandes</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Date</th><th>Acheteur</th><th class="num">Total</th><th>Statut</th></tr></thead>
+          <tbody>
+            ${(orders || []).length ? orders.map(o => `
+              <tr><td>${o.order_date}</td><td>${o.buyer_name || ""}</td><td class="num">${o.total ? Number(o.total).toFixed(2) + " €" : ""}</td><td>${o.status}</td></tr>
+            `).join("") : `<tr class="empty-row"><td colspan="4">Aucune commande pour l'instant.</td></tr>`}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+
+  document.getElementById("product-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const { error } = await sb.from("shop_products").insert({
+      organization_id: state.orgId,
+      name: fd.get("name"),
+      price: Number(fd.get("price")),
+      stock: Number(fd.get("stock") || 0),
+    });
+    if (error) return alert(error.message);
+    renderShop(main);
+  });
+}
+
+/* ---------------------------------------------------------------------
+   Module : Documents & gouvernance
+--------------------------------------------------------------------- */
+async function renderDocs(main){
+  main.innerHTML = `<div class="view-head"><h1>Documents & gouvernance</h1></div><div id="docs-body">Chargement…</div>`;
+  const { data, error } = await sb.from("documents").select("*").eq("organization_id", state.orgId).order("doc_date", { ascending: false });
+  const body = document.getElementById("docs-body");
+  if (error){ body.innerHTML = `<div class="auth-error">${error.message}</div>`; return; }
+
+  body.innerHTML = `
+    <div class="card">
+      <h3>Ajouter un document</h3>
+      <form id="doc-form" class="form-grid">
+        <div class="field" style="flex:2 1 260px"><label>Titre</label><input name="title" required></div>
+        <div class="field"><label>Type</label>
+          <select name="type"><option value="pv_reunion">PV de réunion</option><option value="statuts">Statuts</option><option value="reglement">Règlement</option><option value="autre">Autre</option></select>
+        </div>
+        <div class="field"><label>Date</label><input name="doc_date" type="date"></div>
+        <div class="field" style="flex:2 1 260px"><label>Lien (Drive, etc.)</label><input name="file_url" type="url"></div>
+        <button class="btn btn-primary" type="submit">Ajouter</button>
+      </form>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Date</th><th>Titre</th><th>Type</th><th>Lien</th></tr></thead>
+        <tbody>
+          ${(data || []).length ? data.map(d => `
+            <tr><td>${d.doc_date || ""}</td><td>${d.title}</td><td>${d.type}</td><td>${d.file_url ? `<a href="${d.file_url}" target="_blank">Ouvrir</a>` : ""}</td></tr>
+          `).join("") : `<tr class="empty-row"><td colspan="4">Aucun document pour l'instant.</td></tr>`}
+        </tbody>
+      </table>
+    </div>`;
+
+  document.getElementById("doc-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const { error } = await sb.from("documents").insert({
+      organization_id: state.orgId,
+      title: fd.get("title"),
+      type: fd.get("type"),
+      doc_date: fd.get("doc_date") || null,
+      file_url: fd.get("file_url") || null,
+    });
+    if (error) return alert(error.message);
+    renderDocs(main);
   });
 }
 
