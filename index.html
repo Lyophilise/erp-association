@@ -761,8 +761,12 @@ async function renderStaff(main){
       <div class="card">
         <div class="card-row">
           <div><strong>${e.title}</strong> — ${e.type} · ${e.event_date}</div>
-          <span class="pill ${short ? 'pill-warn' : 'pill-ok'}">${su.length} / ${e.slots_needed} bénévole(s)</span>
+          <div>
+            <span class="pill ${short ? 'pill-warn' : 'pill-ok'}">${su.length} / ${e.slots_needed} bénévole(s)</span>
+            <button class="btn btn-ghost btn-sm edit-vevent-desc-btn" data-id="${e.id}" title="Décrire le fonctionnement">✎ Fonctionnement</button>
+          </div>
         </div>
+        ${e.notes ? `<p class="view-sub" style="white-space:pre-wrap">${e.notes}</p>` : ""}
         <div class="table-wrap" style="margin-bottom:10px">
           <table>
             <thead><tr><th>Nom</th><th>Rôle</th><th></th></tr></thead>
@@ -832,6 +836,17 @@ async function renderStaff(main){
     });
   });
 
+  document.querySelectorAll(".edit-vevent-desc-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const current = (events || []).find(e => e.id === btn.dataset.id)?.notes || "";
+      const text = prompt("Comment fonctionne cet événement (règles, horaires, consignes pour les bénévoles...) :", current);
+      if (text === null) return;
+      const { error } = await sb.from("volunteer_events").update({ notes: text || null }).eq("id", btn.dataset.id);
+      if (error) return alert(error.message);
+      renderStaff(main);
+    });
+  });
+
   document.querySelectorAll(".del-staff-btn").forEach(btn => {
     btn.addEventListener("click", async () => {
       if (!confirm("Retirer cet encadrant ?")) return;
@@ -874,6 +889,7 @@ async function renderCalendar(main){
         <div class="field"><label>Équipe</label><select name="team_id"><option value="">—</option>${teamOptions}</select></div>
         <div class="field"><label>Date/heure</label><input name="start_at" type="datetime-local" required></div>
         <div class="field"><label>Lieu</label><input name="location"></div>
+        <div class="field" style="flex:3 1 320px"><label>Comment ça fonctionne (règles, horaires, consignes...)</label><textarea name="description" rows="2" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--fg)"></textarea></div>
         <button class="btn btn-primary" type="submit">Ajouter</button>
       </form>
     </div>
@@ -887,10 +903,12 @@ async function renderCalendar(main){
         <div class="card-row">
           <div><strong>${c.title}</strong> — ${c.type} · ${new Date(c.start_at).toLocaleString('fr-FR')} ${c.teams?.name ? "· " + c.teams.name : ""} ${c.location ? "· " + c.location : ""}</div>
           <div>
+            <button class="btn btn-ghost btn-sm edit-cal-desc-btn" data-id="${c.id}" title="Décrire le fonctionnement">✎ Fonctionnement</button>
             ${c.team_id ? `<button class="btn btn-ghost btn-sm convoke-btn" data-event="${c.id}" data-team="${c.team_id}">${conv ? "Gérer la convocation" : "Convoquer l'équipe"}</button>` : ""}
             <button class="btn btn-ghost btn-sm del-cal-btn" data-id="${c.id}">🗑</button>
           </div>
         </div>
+        ${c.description ? `<p class="view-sub" style="white-space:pre-wrap">${c.description}</p>` : ""}
         ${conv ? `
           <div class="table-wrap">
             <table>
@@ -987,9 +1005,21 @@ async function renderCalendar(main){
       team_id: fd.get("team_id") || null,
       start_at: new Date(fd.get("start_at")).toISOString(),
       location: fd.get("location") || null,
+      description: fd.get("description") || null,
     });
     if (error) return alert(error.message);
     renderCalendar(main);
+  });
+
+  document.querySelectorAll(".edit-cal-desc-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const current = (cal || []).find(c => c.id === btn.dataset.id)?.description || "";
+      const text = prompt("Comment fonctionne cet événement (règles, horaires, consignes...) :", current);
+      if (text === null) return;
+      const { error } = await sb.from("calendar_events").update({ description: text || null }).eq("id", btn.dataset.id);
+      if (error) return alert(error.message);
+      renderCalendar(main);
+    });
   });
 
   document.getElementById("equip-form").addEventListener("submit", async (e) => {
@@ -1505,6 +1535,10 @@ async function renderTournamentDetail(main, tournamentId){
   body.innerHTML = `
     <button class="btn btn-ghost btn-sm" id="back-to-tournaments" style="margin-bottom:12px">← Tous les tournois</button>
     <div class="view-head"><h1>${t.name}</h1><div class="view-sub">${t.start_date || ""}</div></div>
+    <div class="card">
+      <div class="card-row"><h3>Comment fonctionne ce tournoi</h3><button class="btn btn-ghost btn-sm" id="edit-tournament-desc-btn">✎ Modifier</button></div>
+      <p class="view-sub" style="white-space:pre-wrap">${t.description || "Pas encore de description (format, horaires, règles...)."}</p>
+    </div>
 
     <div class="card">
       <h3>Participants</h3>
@@ -1562,6 +1596,14 @@ async function renderTournamentDetail(main, tournamentId){
 
   document.getElementById("back-to-tournaments").addEventListener("click", () => {
     state.currentTournamentId = null; renderTournaments(main);
+  });
+
+  document.getElementById("edit-tournament-desc-btn").addEventListener("click", async () => {
+    const text = prompt("Comment fonctionne ce tournoi (format, horaires, règles...) :", t.description || "");
+    if (text === null) return;
+    const { error } = await sb.from("tournaments").update({ description: text || null }).eq("id", tournamentId);
+    if (error) return alert(error.message);
+    renderTournamentDetail(main, tournamentId);
   });
 
   document.getElementById("participant-form").addEventListener("submit", async (e) => {
