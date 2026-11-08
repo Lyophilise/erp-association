@@ -1,0 +1,495 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ERP Association</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Jost:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<style>
+/*
+  Palette neutre provisoire — à remplacer par l'identité visuelle réelle du club
+  (logo + couleurs) une fois fournie. Variables centralisées ici pour un
+  remplacement en un seul endroit.
+*/
+:root{
+  --bg:#F5F6F5; --surface:#FFFFFF; --surface-2:#ECEEEC; --border:#DADFDC;
+  --fg:#1B1F1D; --fg-muted:#5C6660; --accent:#2B5B4A; --accent-2:#3F8068;
+  --success:#2F7A4F; --success-bg:#E4F2E8; --warning:#A5680B; --warning-bg:#FBEFD9; --danger:#B3261E; --danger-bg:#FAE3E1;
+  --radius:12px; --font-display:'Jost',sans-serif; --font-body:'IBM Plex Sans',sans-serif; --font-mono:'IBM Plex Mono',monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#10140F; --surface:#171D16; --surface-2:#1F271D; --border:#2A332A;
+    --fg:#EDF1EC; --fg-muted:#9AAA9B; --accent:#4FA383; --accent-2:#6FC4A0;
+    --success:#6FCB8E; --success-bg:#1C3327; --warning:#E3B35B; --warning-bg:#3A2E15; --danger:#F08A82; --danger-bg:#3A1E1B;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#10140F; --surface:#171D16; --surface-2:#1F271D; --border:#2A332A;
+  --fg:#EDF1EC; --fg-muted:#9AAA9B; --accent:#4FA383; --accent-2:#6FC4A0;
+  --success:#6FCB8E; --success-bg:#1C3327; --warning:#E3B35B; --warning-bg:#3A2E15; --danger:#F08A82; --danger-bg:#3A1E1B;
+  color-scheme: dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:14px;line-height:1.5}
+h1,h2,h3{font-family:var(--font-display);margin:0}
+button{font-family:var(--font-body);cursor:pointer}
+input,select,textarea{font-family:var(--font-body);font-size:14px}
+table{font-variant-numeric:tabular-nums;width:100%;border-collapse:collapse}
+a{color:var(--accent)}
+
+.app{display:flex;min-height:100%;width:100%}
+.sidebar{width:232px;flex:0 0 232px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:16px 10px;gap:2px;overflow-y:auto}
+.brand{display:flex;align-items:center;gap:10px;padding:4px 10px 18px}
+.brand-mark{width:30px;height:30px;border-radius:8px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:700;font-size:15px;flex:none}
+.brand-name{font-family:var(--font-display);font-weight:600;font-size:15px}
+.nav-group-label{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--fg-muted);padding:14px 12px 6px;opacity:.75}
+.nav-group:first-of-type .nav-group-label{padding-top:2px}
+.nav-btn{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;border:none;background:transparent;color:var(--fg-muted);text-align:left;font-size:13.5px;font-weight:500;white-space:nowrap;width:100%}
+.nav-btn:hover{background:var(--surface-2);color:var(--fg)}
+.nav-btn.active{background:var(--accent);color:#fff}
+.nav-spacer{flex:1}
+.nav-foot{padding:10px 12px;border-top:1px solid var(--border);margin-top:8px;display:flex;flex-direction:column;gap:6px}
+.nav-ent{font-size:12px;color:var(--fg-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.logout{background:none;border:1px solid var(--border);border-radius:8px;padding:7px 10px;color:var(--fg-muted);font-size:12.5px}
+.logout:hover{color:var(--danger);border-color:var(--danger)}
+
+.main{flex:1;min-width:0;padding:28px 24px 60px 24px;overflow-x:hidden}
+.view-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:20px}
+.view-head h1{font-size:22px}
+.view-sub{color:var(--fg-muted);font-size:13px;margin-top:2px}
+
+.grid-kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:24px}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px}
+.kpi-label{font-size:12px;color:var(--fg-muted);text-transform:uppercase;letter-spacing:.04em}
+.kpi-value{font-family:var(--font-display);font-size:24px;font-weight:600;margin-top:6px}
+.kpi.warn .kpi-value{color:var(--warning)}
+.kpi.bad .kpi-value{color:var(--danger)}
+.kpi.good .kpi-value{color:var(--success)}
+
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin-bottom:20px}
+.card h3{font-size:15px;margin-bottom:12px}
+.card-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;flex-wrap:wrap}
+
+.table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:10px}
+th,td{padding:9px 12px;text-align:left;border-bottom:1px solid var(--border);font-size:13px;white-space:nowrap}
+th{background:var(--surface-2);color:var(--fg-muted);font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:.03em}
+tbody tr:last-child td{border-bottom:none}
+.num{text-align:right}
+.empty-row td{color:var(--fg-muted);text-align:center;padding:24px;font-style:italic}
+
+.pill{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;font-size:11.5px;font-weight:600}
+.pill-ok{background:var(--success-bg);color:var(--success)}
+.pill-warn{background:var(--warning-bg);color:var(--warning)}
+.pill-bad{background:var(--danger-bg);color:var(--danger)}
+.pill-muted{background:var(--surface-2);color:var(--fg-muted)}
+
+.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;align-items:end;margin-bottom:14px}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.field label{font-size:11.5px;color:var(--fg-muted);font-weight:600;text-transform:uppercase;letter-spacing:.03em}
+.field input,.field select{padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--fg);width:100%}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 16px;border-radius:8px;border:1px solid transparent;font-weight:600;font-size:13px}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover{background:var(--accent-2)}
+.btn-ghost{background:transparent;border-color:var(--border);color:var(--fg)}
+.btn-ghost:hover{background:var(--surface-2)}
+.btn-sm{padding:6px 11px;font-size:12px}
+.btn:disabled{opacity:.5;cursor:default}
+
+.auth-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px 16px}
+.auth-card{width:100%;max-width:380px;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:32px 28px}
+.auth-mark{width:44px;height:44px;border-radius:12px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:700;font-size:20px;margin-bottom:16px}
+.auth-card h1{font-size:21px;margin-bottom:4px}
+.auth-card p{color:var(--fg-muted);font-size:13px;margin-bottom:20px}
+.auth-field{margin-bottom:12px;display:flex;flex-direction:column;gap:4px}
+.auth-field label{font-size:12px;font-weight:600;color:var(--fg-muted)}
+.auth-field input{padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--fg)}
+.auth-error{background:var(--danger-bg);color:var(--danger);padding:8px 10px;border-radius:8px;font-size:12.5px;margin-bottom:12px}
+.auth-msg{background:var(--success-bg);color:var(--success);padding:8px 10px;border-radius:8px;font-size:12.5px;margin-bottom:12px}
+
+.placeholder-card{border:1px dashed var(--border);border-radius:var(--radius);padding:24px;text-align:center;color:var(--fg-muted)}
+.placeholder-card strong{display:block;color:var(--fg);font-size:14px;margin-bottom:4px}
+
+.setup-banner{background:var(--warning-bg);color:var(--warning);border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:13px}
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script>
+/* ---------------------------------------------------------------------
+   Configuration Supabase (projet "erp-association")
+--------------------------------------------------------------------- */
+const SUPABASE_URL = "https://hmeovaorwozazltidhbh.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_orYGCskIBIPTK_cpQ-PiHg_-t5JtqCF";
+
+const SETUP_MODE = !SUPABASE_URL || !SUPABASE_ANON_KEY;
+const sb = SETUP_MODE ? null : window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+/* ---------------------------------------------------------------------
+   Définition des modules (nav + roadmap). "ready" = module avec UI/CRUD
+   fonctionnel dans cette V1 ; les autres sont des emplacements réservés.
+--------------------------------------------------------------------- */
+const MODULES = [
+  { group: "Vue d'ensemble", items: [
+    { key: "dashboard", label: "Tableau de bord", ready: true },
+  ]},
+  { group: "Vie associative", items: [
+    { key: "members", label: "Licences & effectifs", ready: true },
+    { key: "finance", label: "Trésorerie", ready: true },
+    { key: "staff", label: "Encadrants & bénévoles", ready: false,
+      desc: "Rôles coachs/dirigeants, planning, mobilisation sur les événements." },
+    { key: "calendar", label: "Calendrier, tournois & matériel", ready: false,
+      desc: "Matchs, tournois, engagement des places, stock/commandes d'équipements." },
+  ]},
+  { group: "Communication & partenaires", items: [
+    { key: "comms", label: "Communication", ready: false,
+      desc: "Convocations, relances licences, newsletters." },
+    { key: "sponsors", label: "Partenaires & sponsoring", ready: false,
+      desc: "Sponsors, contrats, contreparties (panneaux, maillots...)." },
+    { key: "shop", label: "Boutique", ready: false,
+      desc: "Produits, commandes (merchandising, buvette...)." },
+    { key: "docs", label: "Documents & gouvernance", ready: false,
+      desc: "PV de réunion, statuts, règlements." },
+  ]},
+];
+
+/* ---------------------------------------------------------------------
+   État applicatif minimal
+--------------------------------------------------------------------- */
+const state = {
+  session: null,
+  orgId: null,
+  orgName: null,
+  role: null,
+  view: "dashboard",
+  members: [],
+  finance: [],
+  loading: false,
+  authMode: "signin", // signin | signup
+  authError: "",
+};
+
+const root = document.getElementById("root");
+
+function render(){
+  if (SETUP_MODE) return renderSetupScreen();
+  if (!state.session) return renderAuth();
+  return renderApp();
+}
+
+/* ---------------------------------------------------------------------
+   Écran "projet non configuré"
+--------------------------------------------------------------------- */
+function renderSetupScreen(){
+  root.innerHTML = `
+    <div class="auth-wrap">
+      <div class="auth-card">
+        <div class="auth-mark">⚙</div>
+        <h1>Configuration requise</h1>
+        <p>Ce scaffold n'est pas encore relié à un projet Supabase.
+        Renseigne <code>SUPABASE_URL</code> et <code>SUPABASE_ANON_KEY</code>
+        en haut de <code>index.html</code>, puis applique la migration
+        <code>supabase/migrations/0001_init.sql</code>. Voir le README.</p>
+      </div>
+    </div>`;
+}
+
+/* ---------------------------------------------------------------------
+   Auth
+--------------------------------------------------------------------- */
+function renderAuth(){
+  const isSignup = state.authMode === "signup";
+  root.innerHTML = `
+    <div class="auth-wrap">
+      <div class="auth-card">
+        <div class="auth-mark">A</div>
+        <h1>ERP Association</h1>
+        <p>${isSignup ? "Créer un compte" : "Connexion à votre espace association"}</p>
+        ${state.authError ? `<div class="auth-error">${state.authError}</div>` : ""}
+        <form id="auth-form">
+          <div class="auth-field"><label>E-mail</label><input type="email" name="email" required></div>
+          <div class="auth-field"><label>Mot de passe</label><input type="password" name="password" required minlength="6"></div>
+          <button class="btn btn-primary" type="submit" style="width:100%">${isSignup ? "Créer le compte" : "Se connecter"}</button>
+        </form>
+        <div class="auth-toggle" style="margin-top:16px;text-align:center;font-size:13px;color:var(--fg-muted)">
+          ${isSignup ? "Déjà un compte ?" : "Pas encore de compte ?"}
+          <button id="auth-toggle-btn" style="background:none;border:none;color:var(--accent);font-weight:600;padding:0">${isSignup ? "Se connecter" : "Créer un compte"}</button>
+        </div>
+      </div>
+    </div>`;
+
+  document.getElementById("auth-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const email = fd.get("email"), password = fd.get("password");
+    state.authError = "";
+    const { error } = isSignup
+      ? await sb.auth.signUp({ email, password })
+      : await sb.auth.signInWithPassword({ email, password });
+    if (error) { state.authError = error.message; render(); return; }
+    await loadSession();
+  });
+  document.getElementById("auth-toggle-btn").addEventListener("click", () => {
+    state.authMode = isSignup ? "signin" : "signup";
+    render();
+  });
+}
+
+async function loadSession(){
+  const { data } = await sb.auth.getSession();
+  state.session = data.session;
+  if (state.session) await loadMembership();
+  render();
+}
+
+async function loadMembership(){
+  const { data } = await sb
+    .from("memberships")
+    .select("role, organization_id, organizations(name)")
+    .eq("user_id", state.session.user.id)
+    .limit(1)
+    .maybeSingle();
+  if (data){
+    state.orgId = data.organization_id;
+    state.role = data.role;
+    state.orgName = data.organizations?.name || "";
+  }
+}
+
+/* ---------------------------------------------------------------------
+   Shell applicatif
+--------------------------------------------------------------------- */
+function renderApp(){
+  const navHtml = MODULES.map(group => `
+    <div class="nav-group">
+      <div class="nav-group-label">${group.group}</div>
+      ${group.items.map(it => `
+        <button class="nav-btn ${state.view === it.key ? "active" : ""}" data-view="${it.key}">${it.label}</button>
+      `).join("")}
+    </div>
+  `).join("");
+
+  root.innerHTML = `
+    <div class="app">
+      <nav class="sidebar">
+        <div class="brand">
+          <div class="brand-mark">A</div>
+          <div class="brand-name">ERP Association</div>
+        </div>
+        ${navHtml}
+        <div class="nav-spacer"></div>
+        <div class="nav-foot">
+          <div class="nav-ent">${state.orgName || "Aucune association liée"}</div>
+          <div class="nav-ent" style="font-size:11px">${state.session.user.email}</div>
+          <button class="logout" id="logout-btn">Se déconnecter</button>
+        </div>
+      </nav>
+      <main class="main" id="main"></main>
+    </div>`;
+
+  document.querySelectorAll(".nav-btn").forEach(btn => {
+    btn.addEventListener("click", () => { state.view = btn.dataset.view; render(); });
+  });
+  document.getElementById("logout-btn").addEventListener("click", async () => {
+    await sb.auth.signOut();
+    state.session = null; state.orgId = null; render();
+  });
+
+  renderView();
+}
+
+function renderView(){
+  const main = document.getElementById("main");
+  if (!state.orgId){
+    main.innerHTML = `
+      <div class="view-head"><h1>Bienvenue</h1></div>
+      <div class="placeholder-card">
+        <strong>Aucune association liée à ce compte</strong>
+        Demandez une invitation au bureau, ou créez l'organisation initiale
+        depuis Supabase (table <code>organizations</code> + <code>memberships</code>).
+      </div>`;
+    return;
+  }
+
+  const allItems = MODULES.flatMap(g => g.items);
+  const current = allItems.find(it => it.key === state.view);
+
+  if (!current.ready){
+    main.innerHTML = `
+      <div class="view-head"><h1>${current.label}</h1></div>
+      <div class="placeholder-card">
+        <strong>Module à venir</strong>
+        ${current.desc || ""}
+      </div>`;
+    return;
+  }
+
+  if (state.view === "dashboard") return renderDashboard(main);
+  if (state.view === "members") return renderMembers(main);
+  if (state.view === "finance") return renderFinance(main);
+}
+
+/* ---------------------------------------------------------------------
+   Dashboard
+--------------------------------------------------------------------- */
+async function renderDashboard(main){
+  const { data: members } = await sb.from("members").select("licence_status").eq("organization_id", state.orgId);
+  const { data: tx } = await sb.from("finance_transactions").select("amount, type").eq("organization_id", state.orgId);
+
+  const total = members?.length || 0;
+  const paid = members?.filter(m => m.licence_status === "payee").length || 0;
+  const solde = (tx || []).reduce((s, t) => s + (t.type === "recette" ? Number(t.amount) : -Number(t.amount)), 0);
+
+  main.innerHTML = `
+    <div class="view-head"><h1>Tableau de bord</h1><div class="view-sub">${state.orgName}</div></div>
+    <div class="grid-kpi">
+      <div class="kpi"><div class="kpi-label">Licenciés</div><div class="kpi-value">${total}</div></div>
+      <div class="kpi ${paid < total ? "warn" : "good"}"><div class="kpi-label">Licences payées</div><div class="kpi-value">${paid}/${total}</div></div>
+      <div class="kpi ${solde < 0 ? "bad" : "good"}"><div class="kpi-label">Solde trésorerie</div><div class="kpi-value">${solde.toFixed(2)} €</div></div>
+    </div>
+    <div class="card"><h3>Prochaines étapes</h3>
+      <p class="view-sub">Modules en cours de construction : encadrants &amp; bénévoles,
+      calendrier/tournois/matériel, communication, partenaires, boutique, documents.</p>
+    </div>`;
+}
+
+/* ---------------------------------------------------------------------
+   Module : Licences & effectifs
+--------------------------------------------------------------------- */
+async function renderMembers(main){
+  main.innerHTML = `<div class="view-head"><h1>Licences & effectifs</h1></div><div id="members-body">Chargement…</div>`;
+  const { data, error } = await sb.from("members").select("*").eq("organization_id", state.orgId).order("last_name");
+  const body = document.getElementById("members-body");
+  if (error){ body.innerHTML = `<div class="auth-error">${error.message}</div>`; return; }
+  state.members = data || [];
+
+  const statusPill = s => ({
+    payee: '<span class="pill pill-ok">Payée</span>',
+    en_attente: '<span class="pill pill-warn">En attente</span>',
+    expiree: '<span class="pill pill-bad">Expirée</span>',
+    a_faire: '<span class="pill pill-muted">À faire</span>',
+  })[s] || s;
+
+  body.innerHTML = `
+    <div class="card">
+      <h3>Ajouter un licencié</h3>
+      <form id="member-form" class="form-grid">
+        <div class="field"><label>Prénom</label><input name="first_name" required></div>
+        <div class="field"><label>Nom</label><input name="last_name" required></div>
+        <div class="field"><label>Contact parent</label><input name="parent_name"></div>
+        <div class="field"><label>Email parent</label><input name="parent_email" type="email"></div>
+        <button class="btn btn-primary" type="submit">Ajouter</button>
+      </form>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Nom</th><th>Prénom</th><th>Statut licence</th><th>Contact parent</th></tr></thead>
+        <tbody>
+          ${state.members.length ? state.members.map(m => `
+            <tr>
+              <td>${m.last_name}</td>
+              <td>${m.first_name}</td>
+              <td>${statusPill(m.licence_status)}</td>
+              <td>${m.parent_name || ""} ${m.parent_email ? "· " + m.parent_email : ""}</td>
+            </tr>`).join("") : `<tr class="empty-row"><td colspan="4">Aucun licencié pour l'instant.</td></tr>`}
+        </tbody>
+      </table>
+    </div>`;
+
+  document.getElementById("member-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const payload = {
+      organization_id: state.orgId,
+      first_name: fd.get("first_name"),
+      last_name: fd.get("last_name"),
+      parent_name: fd.get("parent_name") || null,
+      parent_email: fd.get("parent_email") || null,
+    };
+    const { error } = await sb.from("members").insert(payload);
+    if (error) return alert(error.message);
+    renderMembers(main);
+  });
+}
+
+/* ---------------------------------------------------------------------
+   Module : Trésorerie
+--------------------------------------------------------------------- */
+async function renderFinance(main){
+  main.innerHTML = `<div class="view-head"><h1>Trésorerie</h1></div><div id="finance-body">Chargement…</div>`;
+  const { data, error } = await sb.from("finance_transactions").select("*").eq("organization_id", state.orgId).order("date", { ascending: false });
+  const body = document.getElementById("finance-body");
+  if (error){ body.innerHTML = `<div class="auth-error">${error.message}</div>`; return; }
+  state.finance = data || [];
+  const solde = state.finance.reduce((s, t) => s + (t.type === "recette" ? Number(t.amount) : -Number(t.amount)), 0);
+
+  body.innerHTML = `
+    <div class="grid-kpi">
+      <div class="kpi ${solde < 0 ? "bad" : "good"}"><div class="kpi-label">Solde</div><div class="kpi-value">${solde.toFixed(2)} €</div></div>
+    </div>
+    <div class="card">
+      <h3>Ajouter une transaction</h3>
+      <form id="tx-form" class="form-grid">
+        <div class="field"><label>Libellé</label><input name="label" required></div>
+        <div class="field"><label>Catégorie</label><input name="category" placeholder="licences, equipements..."></div>
+        <div class="field"><label>Type</label>
+          <select name="type"><option value="recette">Recette</option><option value="depense">Dépense</option></select>
+        </div>
+        <div class="field"><label>Montant (€)</label><input name="amount" type="number" step="0.01" required></div>
+        <button class="btn btn-primary" type="submit">Ajouter</button>
+      </form>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Date</th><th>Libellé</th><th>Catégorie</th><th>Type</th><th class="num">Montant</th></tr></thead>
+        <tbody>
+          ${state.finance.length ? state.finance.map(t => `
+            <tr>
+              <td>${t.date}</td>
+              <td>${t.label}</td>
+              <td>${t.category || ""}</td>
+              <td>${t.type === "recette" ? '<span class="pill pill-ok">Recette</span>' : '<span class="pill pill-bad">Dépense</span>'}</td>
+              <td class="num">${Number(t.amount).toFixed(2)} €</td>
+            </tr>`).join("") : `<tr class="empty-row"><td colspan="5">Aucune transaction.</td></tr>`}
+        </tbody>
+      </table>
+    </div>`;
+
+  document.getElementById("tx-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const payload = {
+      organization_id: state.orgId,
+      label: fd.get("label"),
+      category: fd.get("category") || null,
+      type: fd.get("type"),
+      amount: Number(fd.get("amount")),
+    };
+    const { error } = await sb.from("finance_transactions").insert(payload);
+    if (error) return alert(error.message);
+    renderFinance(main);
+  });
+}
+
+/* ---------------------------------------------------------------------
+   Bootstrap
+--------------------------------------------------------------------- */
+(async function init(){
+  render();
+  if (!SETUP_MODE){
+    await loadSession();
+    sb.auth.onAuthStateChange((_event, session) => {
+      state.session = session;
+      if (session) loadMembership().then(render); else render();
+    });
+  }
+})();
+</script>
+</body>
+</html>
