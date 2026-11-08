@@ -147,7 +147,8 @@ const MODULES = [
     { key: "members", label: "Licences & effectifs", ready: true },
     { key: "finance", label: "Trésorerie", ready: true },
     { key: "staff", label: "Encadrants & bénévoles", ready: true },
-    { key: "calendar", label: "Calendrier, tournois & matériel", ready: true },
+    { key: "calendar", label: "Calendrier & matériel", ready: true },
+    { key: "tournaments", label: "Tournois (poules & classement)", ready: true },
   ]},
   { group: "Communication & partenaires", items: [
     { key: "comms", label: "Communication", ready: true },
@@ -174,9 +175,41 @@ const state = {
   loading: false,
   authMode: "signin", // signin | signup
   authError: "",
+  installPromptEvent: null,
+  currentTournamentId: null,
 };
 
 const root = document.getElementById("root");
+
+function isIOS(){ return /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream; }
+
+function installBannerHtml(){
+  if (state.installPromptEvent){
+    return `<button class="btn btn-primary" id="install-btn" style="width:100%;margin-top:10px">📱 Installer l'application sur mon téléphone</button>`;
+  }
+  if (isIOS()){
+    return `<div class="auth-msg" style="margin-top:10px">📱 Pour l'installer sur iPhone : bouton <strong>Partager</strong> (le carré avec la flèche) puis <strong>"Sur l'écran d'accueil"</strong>.</div>`;
+  }
+  return "";
+}
+
+function wireInstallBanner(){
+  const btn = document.getElementById("install-btn");
+  if (!btn) return;
+  btn.addEventListener("click", async () => {
+    if (!state.installPromptEvent) return;
+    state.installPromptEvent.prompt();
+    await state.installPromptEvent.userChoice;
+    state.installPromptEvent = null;
+    render();
+  });
+}
+
+window.addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();
+  state.installPromptEvent = e;
+  render();
+});
 
 function render(){
   if (SETUP_MODE) return renderSetupScreen();
@@ -222,8 +255,10 @@ function renderAuth(){
           ${isSignup ? "Déjà un compte ?" : "Pas encore de compte ?"}
           <button id="auth-toggle-btn" style="background:none;border:none;color:var(--accent);font-weight:600;padding:0">${isSignup ? "Se connecter" : "Créer un compte"}</button>
         </div>
+        ${installBannerHtml()}
       </div>
     </div>`;
+  wireInstallBanner();
 
   document.getElementById("auth-form").addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -298,6 +333,7 @@ function renderApp(){
         ${navHtml}
         <div class="nav-spacer"></div>
         <div class="nav-foot">
+          ${installBannerHtml()}
           <div class="nav-ent">${state.orgName || "Aucune association liée"}</div>
           <div class="nav-ent" style="font-size:11px">${state.session.user.email}</div>
           <button class="logout" id="logout-btn">Se déconnecter</button>
@@ -305,6 +341,7 @@ function renderApp(){
       </nav>
       <main class="main" id="main"></main>
     </div>`;
+  wireInstallBanner();
 
   document.querySelectorAll(".nav-btn").forEach(btn => {
     btn.addEventListener("click", () => { state.view = btn.dataset.view; render(); });
@@ -348,6 +385,7 @@ function renderView(){
   if (state.view === "finance") return renderFinance(main);
   if (state.view === "staff") return renderStaff(main);
   if (state.view === "calendar") return renderCalendar(main);
+  if (state.view === "tournaments") return renderTournaments(main);
   if (state.view === "comms") return renderComms(main);
   if (state.view === "sponsors") return renderSponsors(main);
   if (state.view === "shop") return renderShop(main);
@@ -441,6 +479,12 @@ async function renderMembers(main){
         <button class="btn btn-primary" type="submit">Ajouter</button>
       </form>
     </div>
+    <div class="card">
+      <h3>Import en masse (CSV)</h3>
+      <p class="view-sub">Colonnes attendues : <code>prenom,nom,statut,email_parent,telephone_parent</code> (statut : a_faire / en_attente / payee / expiree). C'est le format le plus simple à produire depuis l'export Footclubs en attendant un import dédié.</p>
+      <input type="file" id="csv-input" accept=".csv">
+      <div id="csv-result" class="view-sub" style="margin-top:8px"></div>
+    </div>
     <div class="table-wrap">
       <table>
         <thead><tr><th>Nom</th><th>Prénom</th><th>Statut licence</th><th>Contact parent</th><th>Paiement</th><th></th></tr></thead>
@@ -456,7 +500,10 @@ async function renderMembers(main){
               <td>
                 ${m.payment_link ? `<a href="${m.payment_link}" target="_blank" class="btn btn-ghost btn-sm">Lien SumUp</a>` : ""}
                 <button class="btn btn-ghost btn-sm edit-link-btn" data-id="${m.id}" title="Modifier le lien">✎</button>
-                ${m.licence_status !== 'payee' ? `<button class="btn btn-ghost btn-sm relance-btn" data-id="${m.id}" data-name="${m.first_name} ${m.last_name}">Relancer</button>` : ""}
+                ${m.licence_status !== 'payee' ? `
+                  <button class="btn btn-ghost btn-sm sumup-gen-btn" data-id="${m.id}" data-name="${m.first_name} ${m.last_name}">Générer paiement SumUp</button>
+                  <button class="btn btn-ghost btn-sm relance-btn" data-id="${m.id}" data-name="${m.first_name} ${m.last_name}" data-email="${m.parent_email || ''}" data-link="${m.payment_link || ''}">Relancer par e-mail</button>
+                ` : ""}
               </td>
               <td><button class="btn btn-ghost btn-sm delete-member-btn" data-id="${m.id}">🗑</button></td>
             </tr>`).join("") : `<tr class="empty-row"><td colspan="6">Aucun licencié pour l'instant.</td></tr>`}
@@ -510,6 +557,16 @@ async function renderMembers(main){
 
   document.querySelectorAll(".relance-btn").forEach(btn => {
     btn.addEventListener("click", async () => {
+      const email = btn.dataset.email;
+      let sentByEmail = false;
+      if (email){
+        const { error: mailError } = await sb.functions.invoke("send-email", { body: {
+          to: email, subject: `Relance licence - ${btn.dataset.name}`,
+          html: `<p>Bonjour,</p><p>Petit rappel : la licence de ${btn.dataset.name} n'est pas encore réglée.</p>${btn.dataset.link ? `<p><a href="${btn.dataset.link}">Payer en ligne</a></p>` : ""}`,
+        }});
+        sentByEmail = !mailError;
+        if (mailError) console.warn("Email non envoyé (Brevo non configuré ?)", mailError);
+      }
       const { error } = await sb.from("communications").insert({
         organization_id: state.orgId,
         type: "relance",
@@ -518,8 +575,53 @@ async function renderMembers(main){
         sent_at: new Date().toISOString(),
       });
       if (error) return alert(error.message);
-      alert("Relance enregistrée (visible dans Communication).");
+      alert(sentByEmail ? "E-mail de relance envoyé." : "Relance enregistrée, mais l'e-mail n'est pas parti (pas d'adresse parent, ou Brevo pas encore configuré).");
     });
+  });
+
+  document.querySelectorAll(".sumup-gen-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const amount = prompt(`Montant à demander pour ${btn.dataset.name} (€) :`, "80");
+      if (!amount) return;
+      const { data, error } = await sb.functions.invoke("sumup-create-checkout", { body: {
+        member_id: btn.dataset.id, amount: Number(amount), description: `Licence - ${btn.dataset.name}`,
+      }});
+      if (error || data?.error){
+        alert(`SumUp non configuré : ${data?.error || error.message}\n\nIl faut ajouter les secrets SUMUP_API_KEY et SUMUP_MERCHANT_CODE dans Supabase.`);
+        return;
+      }
+      alert("Lien de paiement généré automatiquement et enregistré sur le licencié.");
+      renderMembers(main);
+    });
+  });
+
+  const csvInput = document.getElementById("csv-input");
+  if (csvInput) csvInput.addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const text = await file.text();
+    const lines = text.split(/\r?\n/).filter(l => l.trim());
+    const header = lines[0].split(",").map(h => h.trim().toLowerCase());
+    const rows = lines.slice(1).map(line => {
+      const cells = line.split(",");
+      const obj = {};
+      header.forEach((h, i) => obj[h] = (cells[i] || "").trim());
+      return obj;
+    });
+    const validStatuses = ['a_faire','en_attente','payee','expiree'];
+    const payload = rows.filter(r => r.nom && r.prenom).map(r => ({
+      organization_id: state.orgId,
+      first_name: r.prenom,
+      last_name: r.nom,
+      licence_status: validStatuses.includes(r.statut) ? r.statut : 'a_faire',
+      parent_email: r.email_parent || null,
+      parent_phone: r.telephone_parent || null,
+    }));
+    const result = document.getElementById("csv-result");
+    if (!payload.length){ result.textContent = "Aucune ligne valide trouvée (colonnes nom/prenom manquantes ?)."; return; }
+    const { error } = await sb.from("members").insert(payload);
+    result.textContent = error ? `Erreur : ${error.message}` : `${payload.length} licencié(s) importé(s).`;
+    if (!error) renderMembers(main);
   });
 }
 
@@ -623,11 +725,12 @@ async function renderStaff(main){
       </form>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Nom</th><th>Équipe</th><th>Rôle</th></tr></thead>
+          <thead><tr><th>Nom</th><th>Équipe</th><th>Rôle</th><th></th></tr></thead>
           <tbody>
             ${(staff || []).length ? staff.map(s => `
-              <tr><td>${s.display_name || ""}</td><td>${s.teams?.name || ""}</td><td>${s.role}</td></tr>
-            `).join("") : `<tr class="empty-row"><td colspan="3">Aucun encadrant pour l'instant.</td></tr>`}
+              <tr><td>${s.display_name || ""}</td><td>${s.teams?.name || ""}</td><td>${s.role}</td>
+              <td><button class="btn btn-ghost btn-sm del-staff-btn" data-id="${s.id}">🗑</button></td></tr>
+            `).join("") : `<tr class="empty-row"><td colspan="4">Aucun encadrant pour l'instant.</td></tr>`}
           </tbody>
         </table>
       </div>
@@ -724,6 +827,15 @@ async function renderStaff(main){
       renderStaff(main);
     });
   });
+
+  document.querySelectorAll(".del-staff-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      if (!confirm("Retirer cet encadrant ?")) return;
+      const { error } = await sb.from("team_staff").delete().eq("id", btn.dataset.id);
+      if (error) return alert(error.message);
+      renderStaff(main);
+    });
+  });
 }
 
 /* ---------------------------------------------------------------------
@@ -731,37 +843,72 @@ async function renderStaff(main){
 --------------------------------------------------------------------- */
 async function renderCalendar(main){
   main.innerHTML = `<div class="view-head"><h1>Calendrier, tournois & matériel</h1></div><div id="calendar-body">Chargement…</div>`;
-  const [{ data: cal, error: e1 }, { data: items, error: e2 }] = await Promise.all([
-    sb.from("calendar_events").select("*").eq("organization_id", state.orgId).order("start_at"),
+  const [{ data: cal, error: e1 }, { data: items, error: e2 }, { data: teams }, { data: convs }, { data: convPlayers }] = await Promise.all([
+    sb.from("calendar_events").select("*, teams(name)").eq("organization_id", state.orgId).order("start_at"),
     sb.from("equipment_items").select("*").eq("organization_id", state.orgId).order("name"),
+    sb.from("teams").select("id, name").eq("organization_id", state.orgId).order("name"),
+    sb.from("convocations").select("*").eq("organization_id", state.orgId),
+    sb.from("convocation_players").select("*, members(first_name, last_name)").eq("organization_id", state.orgId),
   ]);
   const body = document.getElementById("calendar-body");
   if (e1 || e2){ body.innerHTML = `<div class="auth-error">${(e1||e2).message}</div>`; return; }
 
+  const teamOptions = (teams || []).map(t => `<option value="${t.id}">${t.name}</option>`).join("");
+  const convFor = eid => (convs || []).find(c => c.event_id === eid);
+  const playersFor = cid => (convPlayers || []).filter(p => p.convocation_id === cid);
+
   body.innerHTML = `
     <div class="card">
       <h3>Calendrier (matchs, tournois, réunions...)</h3>
-      <div class="view-sub" style="margin-bottom:10px">Les tableaux/poules de tournoi façon Tournify ne sont pas encore implémentés — pour l'instant chaque tournoi est juste un événement daté.</div>
+      <div class="view-sub" style="margin-bottom:10px">Pour un vrai tournoi avec poules/classement, utilise le nouvel onglet "Tournois" dans le menu.</div>
       <form id="cal-form" class="form-grid">
         <div class="field"><label>Titre</label><input name="title" required></div>
         <div class="field"><label>Type</label>
           <select name="type"><option value="match">Match</option><option value="tournoi">Tournoi</option><option value="reunion">Réunion</option><option value="ag">AG</option><option value="autre">Autre</option></select>
         </div>
+        <div class="field"><label>Équipe</label><select name="team_id"><option value="">—</option>${teamOptions}</select></div>
         <div class="field"><label>Date/heure</label><input name="start_at" type="datetime-local" required></div>
         <div class="field"><label>Lieu</label><input name="location"></div>
         <button class="btn btn-primary" type="submit">Ajouter</button>
       </form>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Date</th><th>Titre</th><th>Type</th><th>Lieu</th></tr></thead>
-          <tbody>
-            ${(cal || []).length ? cal.map(c => `
-              <tr><td>${new Date(c.start_at).toLocaleString('fr-FR')}</td><td>${c.title}</td><td>${c.type}</td><td>${c.location || ""}</td></tr>
-            `).join("") : `<tr class="empty-row"><td colspan="4">Aucun événement pour l'instant.</td></tr>`}
-          </tbody>
-        </table>
-      </div>
     </div>
+
+    <h3 style="margin-bottom:12px">Événements & convocations</h3>
+    ${(cal || []).length ? cal.map(c => {
+      const conv = convFor(c.id);
+      const players = conv ? playersFor(conv.id) : [];
+      return `
+      <div class="card" data-event-card="${c.id}">
+        <div class="card-row">
+          <div><strong>${c.title}</strong> — ${c.type} · ${new Date(c.start_at).toLocaleString('fr-FR')} ${c.teams?.name ? "· " + c.teams.name : ""} ${c.location ? "· " + c.location : ""}</div>
+          <div>
+            ${c.team_id ? `<button class="btn btn-ghost btn-sm convoke-btn" data-event="${c.id}" data-team="${c.team_id}">${conv ? "Gérer la convocation" : "Convoquer l'équipe"}</button>` : ""}
+            <button class="btn btn-ghost btn-sm del-cal-btn" data-id="${c.id}">🗑</button>
+          </div>
+        </div>
+        ${conv ? `
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Joueur</th><th>Statut</th><th></th></tr></thead>
+              <tbody>
+                ${players.length ? players.map(p => `
+                  <tr>
+                    <td>${p.members?.first_name || ""} ${p.members?.last_name || ""}</td>
+                    <td>
+                      <select class="conv-status-select" data-id="${p.id}">
+                        ${['convoque','present','absent','sans_reponse'].map(s => `<option value="${s}" ${s===p.status?'selected':''}>${({convoque:'Convoqué',present:'Présent',absent:'Absent',sans_reponse:'Sans réponse'})[s]}</option>`).join("")}
+                      </select>
+                    </td>
+                    <td><button class="btn btn-ghost btn-sm del-convplayer-btn" data-id="${p.id}">🗑</button></td>
+                  </tr>
+                `).join("") : `<tr class="empty-row"><td colspan="3">Personne de convoqué encore.</td></tr>`}
+              </tbody>
+            </table>
+          </div>
+          <button class="btn btn-ghost btn-sm send-convocation-btn" data-conv="${conv.id}" data-event="${c.id}">Envoyer la convocation par e-mail</button>
+        ` : ""}
+      </div>`;
+    }).join("") : `<div class="placeholder-card">Aucun événement pour l'instant.</div>`}
 
     <div class="card">
       <h3>Matériel (stock)</h3>
@@ -773,11 +920,12 @@ async function renderCalendar(main){
       </form>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Nom</th><th>Catégorie</th><th class="num">Quantité</th></tr></thead>
+          <thead><tr><th>Nom</th><th>Catégorie</th><th class="num">Quantité</th><th></th></tr></thead>
           <tbody>
             ${(items || []).length ? items.map(i => `
-              <tr><td>${i.name}</td><td>${i.category || ""}</td><td class="num">${i.quantity}</td></tr>
-            `).join("") : `<tr class="empty-row"><td colspan="3">Aucun article pour l'instant.</td></tr>`}
+              <tr><td>${i.name}</td><td>${i.category || ""}</td><td class="num">${i.quantity}</td>
+              <td><button class="btn btn-ghost btn-sm del-equip-btn" data-id="${i.id}">🗑</button></td></tr>
+            `).join("") : `<tr class="empty-row"><td colspan="4">Aucun article pour l'instant.</td></tr>`}
           </tbody>
         </table>
       </div>
@@ -790,6 +938,7 @@ async function renderCalendar(main){
       organization_id: state.orgId,
       title: fd.get("title"),
       type: fd.get("type"),
+      team_id: fd.get("team_id") || null,
       start_at: new Date(fd.get("start_at")).toISOString(),
       location: fd.get("location") || null,
     });
@@ -808,6 +957,88 @@ async function renderCalendar(main){
     });
     if (error) return alert(error.message);
     renderCalendar(main);
+  });
+
+  document.querySelectorAll(".del-cal-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      if (!confirm("Supprimer cet événement ?")) return;
+      const { error } = await sb.from("calendar_events").delete().eq("id", btn.dataset.id);
+      if (error) return alert(error.message);
+      renderCalendar(main);
+    });
+  });
+
+  document.querySelectorAll(".del-equip-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      if (!confirm("Supprimer cet article ?")) return;
+      const { error } = await sb.from("equipment_items").delete().eq("id", btn.dataset.id);
+      if (error) return alert(error.message);
+      renderCalendar(main);
+    });
+  });
+
+  document.querySelectorAll(".convoke-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const eventId = btn.dataset.event, teamId = btn.dataset.team;
+      let conv = (convs || []).find(c => c.event_id === eventId);
+      if (!conv){
+        const { data, error } = await sb.from("convocations").insert({
+          organization_id: state.orgId, event_id: eventId, team_id: teamId,
+        }).select().single();
+        if (error) return alert(error.message);
+        conv = data;
+      }
+      const { data: roster } = await sb.from("members").select("id, first_name, last_name").eq("organization_id", state.orgId).eq("team_id", teamId);
+      const { data: already } = await sb.from("convocation_players").select("member_id").eq("convocation_id", conv.id);
+      const alreadyIds = new Set((already || []).map(p => p.member_id));
+      const toAdd = (roster || []).filter(m => !alreadyIds.has(m.id));
+      if (toAdd.length){
+        await sb.from("convocation_players").insert(toAdd.map(m => ({
+          convocation_id: conv.id, organization_id: state.orgId, member_id: m.id,
+        })));
+      }
+      renderCalendar(main);
+    });
+  });
+
+  document.querySelectorAll(".conv-status-select").forEach(sel => {
+    sel.addEventListener("change", async () => {
+      const { error } = await sb.from("convocation_players").update({ status: sel.value }).eq("id", sel.dataset.id);
+      if (error) return alert(error.message);
+      renderCalendar(main);
+    });
+  });
+
+  document.querySelectorAll(".del-convplayer-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const { error } = await sb.from("convocation_players").delete().eq("id", btn.dataset.id);
+      if (error) return alert(error.message);
+      renderCalendar(main);
+    });
+  });
+
+  document.querySelectorAll(".send-convocation-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const convId = btn.dataset.conv, eventId = btn.dataset.event;
+      const ev = (cal || []).find(c => c.id === eventId);
+      const players = playersFor(convId);
+      let sent = 0, failed = 0;
+      for (const p of players){
+        const { data: m } = await sb.from("members").select("parent_email, first_name, last_name").eq("id", p.member_id).single();
+        if (!m?.parent_email) continue;
+        const { error } = await sb.functions.invoke("send-email", { body: {
+          to: m.parent_email, toName: `${m.first_name} ${m.last_name}`,
+          subject: `Convocation - ${ev.title}`,
+          html: `<p>Bonjour,</p><p>${m.first_name} ${m.last_name} est convoqué(e) pour : <strong>${ev.title}</strong> le ${new Date(ev.start_at).toLocaleString('fr-FR')}${ev.location ? ' à ' + ev.location : ''}.</p>`,
+        }});
+        if (error) failed++; else sent++;
+      }
+      await sb.from("communications").insert({
+        organization_id: state.orgId, type: "convocation", subject: `Convocation - ${ev.title}`,
+        event_id: eventId, recipients_count: sent, sent_at: new Date().toISOString(),
+      });
+      alert(sent || failed ? `Envoyé à ${sent} parent(s)${failed ? `, ${failed} échec(s) (Brevo non configuré ?)` : ""}.` : "Aucun e-mail parent renseigné pour ces joueurs.");
+    });
   });
 }
 
@@ -834,11 +1065,12 @@ async function renderComms(main){
     </div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Type</th><th>Sujet</th><th>Destinataires</th></tr></thead>
+        <thead><tr><th>Type</th><th>Sujet</th><th>Destinataires</th><th></th></tr></thead>
         <tbody>
           ${(data || []).length ? data.map(c => `
-            <tr><td>${c.type}</td><td>${c.subject}</td><td class="num">${c.recipients_count || 0}</td></tr>
-          `).join("") : `<tr class="empty-row"><td colspan="3">Aucune communication pour l'instant.</td></tr>`}
+            <tr><td>${c.type}</td><td>${c.subject}</td><td class="num">${c.recipients_count || 0}</td>
+            <td><button class="btn btn-ghost btn-sm del-comm-btn" data-id="${c.id}">🗑</button></td></tr>
+          `).join("") : `<tr class="empty-row"><td colspan="4">Aucune communication pour l'instant.</td></tr>`}
         </tbody>
       </table>
     </div>`;
@@ -853,6 +1085,15 @@ async function renderComms(main){
     });
     if (error) return alert(error.message);
     renderComms(main);
+  });
+
+  document.querySelectorAll(".del-comm-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      if (!confirm("Supprimer cette communication ?")) return;
+      const { error } = await sb.from("communications").delete().eq("id", btn.dataset.id);
+      if (error) return alert(error.message);
+      renderComms(main);
+    });
   });
 }
 
@@ -878,11 +1119,12 @@ async function renderSponsors(main){
     </div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Nom</th><th>Contact</th><th class="num">Montant</th><th>Contrepartie</th></tr></thead>
+        <thead><tr><th>Nom</th><th>Contact</th><th class="num">Montant</th><th>Contrepartie</th><th></th></tr></thead>
         <tbody>
           ${(data || []).length ? data.map(s => `
-            <tr><td>${s.name}</td><td>${s.contact_name || ""}</td><td class="num">${s.contract_amount ? Number(s.contract_amount).toFixed(2) + " €" : ""}</td><td>${s.benefits_text || ""}</td></tr>
-          `).join("") : `<tr class="empty-row"><td colspan="4">Aucun partenaire pour l'instant.</td></tr>`}
+            <tr><td>${s.name}</td><td>${s.contact_name || ""}</td><td class="num">${s.contract_amount ? Number(s.contract_amount).toFixed(2) + " €" : ""}</td><td>${s.benefits_text || ""}</td>
+            <td><button class="btn btn-ghost btn-sm del-sponsor-btn" data-id="${s.id}">🗑</button></td></tr>
+          `).join("") : `<tr class="empty-row"><td colspan="5">Aucun partenaire pour l'instant.</td></tr>`}
         </tbody>
       </table>
     </div>`;
@@ -899,6 +1141,15 @@ async function renderSponsors(main){
     });
     if (error) return alert(error.message);
     renderSponsors(main);
+  });
+
+  document.querySelectorAll(".del-sponsor-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      if (!confirm("Supprimer ce partenaire ?")) return;
+      const { error } = await sb.from("sponsors").delete().eq("id", btn.dataset.id);
+      if (error) return alert(error.message);
+      renderSponsors(main);
+    });
   });
 }
 
@@ -925,24 +1176,32 @@ async function renderShop(main){
       </form>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Nom</th><th class="num">Prix</th><th class="num">Stock</th></tr></thead>
+          <thead><tr><th>Nom</th><th class="num">Prix</th><th class="num">Stock</th><th></th></tr></thead>
           <tbody>
             ${(products || []).length ? products.map(p => `
-              <tr><td>${p.name}</td><td class="num">${Number(p.price).toFixed(2)} €</td><td class="num">${p.stock}</td></tr>
-            `).join("") : `<tr class="empty-row"><td colspan="3">Aucun produit pour l'instant.</td></tr>`}
+              <tr><td>${p.name}</td><td class="num">${Number(p.price).toFixed(2)} €</td><td class="num">${p.stock}</td>
+              <td><button class="btn btn-ghost btn-sm del-product-btn" data-id="${p.id}">🗑</button></td></tr>
+            `).join("") : `<tr class="empty-row"><td colspan="4">Aucun produit pour l'instant.</td></tr>`}
           </tbody>
         </table>
       </div>
     </div>
     <div class="card">
-      <h3>Commandes</h3>
+      <h3>Nouvelle commande</h3>
+      <form id="order-form" class="form-grid">
+        <div class="field"><label>Acheteur</label><input name="buyer_name" required></div>
+        <div class="field"><label>Produit</label><select name="product">${(products || []).map(p => `<option value="${p.name}" data-price="${p.price}">${p.name}</option>`).join("")}</select></div>
+        <div class="field"><label>Quantité</label><input name="qty" type="number" value="1" min="1"></div>
+        <button class="btn btn-primary" type="submit">Ajouter</button>
+      </form>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Date</th><th>Acheteur</th><th class="num">Total</th><th>Statut</th></tr></thead>
+          <thead><tr><th>Date</th><th>Acheteur</th><th class="num">Total</th><th>Statut</th><th></th></tr></thead>
           <tbody>
             ${(orders || []).length ? orders.map(o => `
-              <tr><td>${o.order_date}</td><td>${o.buyer_name || ""}</td><td class="num">${o.total ? Number(o.total).toFixed(2) + " €" : ""}</td><td>${o.status}</td></tr>
-            `).join("") : `<tr class="empty-row"><td colspan="4">Aucune commande pour l'instant.</td></tr>`}
+              <tr><td>${o.order_date}</td><td>${o.buyer_name || ""}</td><td class="num">${o.total ? Number(o.total).toFixed(2) + " €" : ""}</td><td>${o.status}</td>
+              <td><button class="btn btn-ghost btn-sm del-order-btn" data-id="${o.id}">🗑</button></td></tr>
+            `).join("") : `<tr class="empty-row"><td colspan="5">Aucune commande pour l'instant.</td></tr>`}
           </tbody>
         </table>
       </div>
@@ -959,6 +1218,42 @@ async function renderShop(main){
     });
     if (error) return alert(error.message);
     renderShop(main);
+  });
+
+  document.querySelectorAll(".del-product-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      if (!confirm("Supprimer ce produit ?")) return;
+      const { error } = await sb.from("shop_products").delete().eq("id", btn.dataset.id);
+      if (error) return alert(error.message);
+      renderShop(main);
+    });
+  });
+
+  const orderForm = document.getElementById("order-form");
+  if (orderForm) orderForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const sel = orderForm.querySelector('select[name="product"]');
+    const price = Number(sel.selectedOptions[0]?.dataset.price || 0);
+    const qty = Number(fd.get("qty") || 1);
+    const { error } = await sb.from("shop_orders").insert({
+      organization_id: state.orgId,
+      buyer_name: fd.get("buyer_name"),
+      items: [{ product: fd.get("product"), qty }],
+      total: price * qty,
+      status: "en_attente",
+    });
+    if (error) return alert(error.message);
+    renderShop(main);
+  });
+
+  document.querySelectorAll(".del-order-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      if (!confirm("Supprimer cette commande ?")) return;
+      const { error } = await sb.from("shop_orders").delete().eq("id", btn.dataset.id);
+      if (error) return alert(error.message);
+      renderShop(main);
+    });
   });
 }
 
@@ -986,11 +1281,12 @@ async function renderDocs(main){
     </div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Date</th><th>Titre</th><th>Type</th><th>Lien</th></tr></thead>
+        <thead><tr><th>Date</th><th>Titre</th><th>Type</th><th>Lien</th><th></th></tr></thead>
         <tbody>
           ${(data || []).length ? data.map(d => `
-            <tr><td>${d.doc_date || ""}</td><td>${d.title}</td><td>${d.type}</td><td>${d.file_url ? `<a href="${d.file_url}" target="_blank">Ouvrir</a>` : ""}</td></tr>
-          `).join("") : `<tr class="empty-row"><td colspan="4">Aucun document pour l'instant.</td></tr>`}
+            <tr><td>${d.doc_date || ""}</td><td>${d.title}</td><td>${d.type}</td><td>${d.file_url ? `<a href="${d.file_url}" target="_blank">Ouvrir</a>` : ""}</td>
+            <td><button class="btn btn-ghost btn-sm del-doc-btn" data-id="${d.id}">🗑</button></td></tr>
+          `).join("") : `<tr class="empty-row"><td colspan="5">Aucun document pour l'instant.</td></tr>`}
         </tbody>
       </table>
     </div>`;
@@ -1007,6 +1303,217 @@ async function renderDocs(main){
     });
     if (error) return alert(error.message);
     renderDocs(main);
+  });
+
+  document.querySelectorAll(".del-doc-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      if (!confirm("Supprimer ce document ?")) return;
+      const { error } = await sb.from("documents").delete().eq("id", btn.dataset.id);
+      if (error) return alert(error.message);
+      renderDocs(main);
+    });
+  });
+}
+
+/* ---------------------------------------------------------------------
+   Module : Tournois (façon Tournify - V1 : poule + classement)
+--------------------------------------------------------------------- */
+async function renderTournaments(main){
+  if (state.currentTournamentId) return renderTournamentDetail(main, state.currentTournamentId);
+
+  main.innerHTML = `<div class="view-head"><h1>Tournois</h1></div><div id="tournaments-body">Chargement…</div>`;
+  const { data, error } = await sb.from("tournaments").select("*").eq("organization_id", state.orgId).order("start_date", { ascending: false });
+  const body = document.getElementById("tournaments-body");
+  if (error){ body.innerHTML = `<div class="auth-error">${error.message}</div>`; return; }
+
+  body.innerHTML = `
+    <div class="card">
+      <h3>Créer un tournoi</h3>
+      <form id="tournament-form" class="form-grid">
+        <div class="field"><label>Nom</label><input name="name" required placeholder="Tournoi Futsal U11"></div>
+        <div class="field"><label>Date</label><input name="start_date" type="date"></div>
+        <button class="btn btn-primary" type="submit">Créer</button>
+      </form>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Date</th><th>Nom</th><th></th></tr></thead>
+        <tbody>
+          ${(data || []).length ? data.map(t => `
+            <tr>
+              <td>${t.start_date || ""}</td><td>${t.name}</td>
+              <td>
+                <button class="btn btn-ghost btn-sm open-tournament-btn" data-id="${t.id}">Ouvrir</button>
+                <button class="btn btn-ghost btn-sm del-tournament-btn" data-id="${t.id}">🗑</button>
+              </td>
+            </tr>
+          `).join("") : `<tr class="empty-row"><td colspan="3">Aucun tournoi pour l'instant.</td></tr>`}
+        </tbody>
+      </table>
+    </div>`;
+
+  document.getElementById("tournament-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const { error } = await sb.from("tournaments").insert({
+      organization_id: state.orgId, name: fd.get("name"), start_date: fd.get("start_date") || null,
+    });
+    if (error) return alert(error.message);
+    renderTournaments(main);
+  });
+
+  document.querySelectorAll(".open-tournament-btn").forEach(btn => {
+    btn.addEventListener("click", () => { state.currentTournamentId = btn.dataset.id; renderTournaments(main); });
+  });
+
+  document.querySelectorAll(".del-tournament-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      if (!confirm("Supprimer ce tournoi (et ses participants/matchs) ?")) return;
+      const { error } = await sb.from("tournaments").delete().eq("id", btn.dataset.id);
+      if (error) return alert(error.message);
+      renderTournaments(main);
+    });
+  });
+}
+
+async function renderTournamentDetail(main, tournamentId){
+  main.innerHTML = `<div class="view-head"><h1>Tournoi</h1></div><div id="tdetail-body">Chargement…</div>`;
+  const [{ data: t }, { data: participants, error: e1 }, { data: matches, error: e2 }] = await Promise.all([
+    sb.from("tournaments").select("*").eq("id", tournamentId).single(),
+    sb.from("tournament_participants").select("*").eq("tournament_id", tournamentId).order("name"),
+    sb.from("tournament_matches").select("*").eq("tournament_id", tournamentId),
+  ]);
+  const body = document.getElementById("tdetail-body");
+  if (e1 || e2){ body.innerHTML = `<div class="auth-error">${(e1||e2).message}</div>`; return; }
+
+  const nameOf = id => participants.find(p => p.id === id)?.name || "?";
+
+  // classement
+  const stats = {};
+  (participants || []).forEach(p => stats[p.id] = { name: p.name, j:0, g:0, n:0, p:0, bp:0, bc:0, pts:0 });
+  (matches || []).filter(m => m.played).forEach(m => {
+    const h = stats[m.home_id], a = stats[m.away_id];
+    if (!h || !a) return;
+    h.j++; a.j++; h.bp += m.home_score; h.bc += m.away_score; a.bp += m.away_score; a.bc += m.home_score;
+    if (m.home_score > m.away_score){ h.g++; h.pts += 3; a.p++; }
+    else if (m.home_score < m.away_score){ a.g++; a.pts += 3; h.p++; }
+    else { h.n++; a.n++; h.pts += 1; a.pts += 1; }
+  });
+  const standings = Object.values(stats).sort((a,b) => b.pts - a.pts || (b.bp-b.bc) - (a.bp-a.bc));
+
+  body.innerHTML = `
+    <button class="btn btn-ghost btn-sm" id="back-to-tournaments" style="margin-bottom:12px">← Tous les tournois</button>
+    <div class="view-head"><h1>${t.name}</h1><div class="view-sub">${t.start_date || ""}</div></div>
+
+    <div class="card">
+      <h3>Participants</h3>
+      <form id="participant-form" class="form-grid">
+        <div class="field"><label>Nom de l'équipe</label><input name="name" required></div>
+        <button class="btn btn-primary" type="submit">Ajouter</button>
+      </form>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Équipe</th><th></th></tr></thead>
+          <tbody>
+            ${(participants || []).length ? participants.map(p => `
+              <tr><td>${p.name}</td><td><button class="btn btn-ghost btn-sm del-participant-btn" data-id="${p.id}">🗑</button></td></tr>
+            `).join("") : `<tr class="empty-row"><td colspan="2">Aucun participant.</td></tr>`}
+          </tbody>
+        </table>
+      </div>
+      ${(participants || []).length >= 2 ? `<button class="btn btn-ghost btn-sm" id="gen-matches-btn" style="margin-top:10px">Générer les matchs de poule</button>` : ""}
+    </div>
+
+    <div class="card">
+      <h3>Classement</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Équipe</th><th class="num">J</th><th class="num">G</th><th class="num">N</th><th class="num">P</th><th class="num">BP</th><th class="num">BC</th><th class="num">Pts</th></tr></thead>
+          <tbody>
+            ${standings.length ? standings.map(s => `
+              <tr><td>${s.name}</td><td class="num">${s.j}</td><td class="num">${s.g}</td><td class="num">${s.n}</td><td class="num">${s.p}</td><td class="num">${s.bp}</td><td class="num">${s.bc}</td><td class="num"><strong>${s.pts}</strong></td></tr>
+            `).join("") : `<tr class="empty-row"><td colspan="8">Pas encore de match joué.</td></tr>`}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Matchs</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Domicile</th><th></th><th>Extérieur</th><th></th></tr></thead>
+          <tbody>
+            ${(matches || []).length ? matches.map(m => `
+              <tr data-match="${m.id}">
+                <td>${nameOf(m.home_id)}</td>
+                <td class="num"><input class="score-input" data-id="${m.id}" data-side="home" type="number" min="0" style="width:50px" value="${m.home_score ?? ''}"></td>
+                <td>${nameOf(m.away_id)}</td>
+                <td class="num"><input class="score-input" data-id="${m.id}" data-side="away" type="number" min="0" style="width:50px" value="${m.away_score ?? ''}">
+                  <button class="btn btn-ghost btn-sm del-match-btn" data-id="${m.id}">🗑</button>
+                </td>
+              </tr>
+            `).join("") : `<tr class="empty-row"><td colspan="4">Pas encore de matchs - ajoute au moins 2 participants puis génère la poule.</td></tr>`}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+
+  document.getElementById("back-to-tournaments").addEventListener("click", () => {
+    state.currentTournamentId = null; renderTournaments(main);
+  });
+
+  document.getElementById("participant-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const { error } = await sb.from("tournament_participants").insert({
+      tournament_id: tournamentId, organization_id: state.orgId, name: fd.get("name"),
+    });
+    if (error) return alert(error.message);
+    renderTournamentDetail(main, tournamentId);
+  });
+
+  document.querySelectorAll(".del-participant-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const { error } = await sb.from("tournament_participants").delete().eq("id", btn.dataset.id);
+      if (error) return alert(error.message);
+      renderTournamentDetail(main, tournamentId);
+    });
+  });
+
+  const genBtn = document.getElementById("gen-matches-btn");
+  if (genBtn) genBtn.addEventListener("click", async () => {
+    const pairs = [];
+    for (let i = 0; i < participants.length; i++)
+      for (let j = i+1; j < participants.length; j++)
+        pairs.push({ tournament_id: tournamentId, organization_id: state.orgId, home_id: participants[i].id, away_id: participants[j].id });
+    const { error } = await sb.from("tournament_matches").insert(pairs);
+    if (error) return alert(error.message);
+    renderTournamentDetail(main, tournamentId);
+  });
+
+  document.querySelectorAll(".score-input").forEach(input => {
+    input.addEventListener("change", async () => {
+      const row = document.querySelector(`tr[data-match="${input.dataset.id}"]`);
+      const homeVal = row.querySelector('[data-side="home"]').value;
+      const awayVal = row.querySelector('[data-side="away"]').value;
+      const played = homeVal !== "" && awayVal !== "";
+      const { error } = await sb.from("tournament_matches").update({
+        home_score: homeVal === "" ? null : Number(homeVal),
+        away_score: awayVal === "" ? null : Number(awayVal),
+        played,
+      }).eq("id", input.dataset.id);
+      if (error) return alert(error.message);
+      renderTournamentDetail(main, tournamentId);
+    });
+  });
+
+  document.querySelectorAll(".del-match-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const { error } = await sb.from("tournament_matches").delete().eq("id", btn.dataset.id);
+      if (error) return alert(error.message);
+      renderTournamentDetail(main, tournamentId);
+    });
   });
 }
 
