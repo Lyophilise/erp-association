@@ -446,7 +446,13 @@ async function renderDashboard(main){
       <div class="table-wrap"><table>
         <tbody>${lowStock.map(i => `<tr><td>${i.name}</td><td class="num">${i.quantity} ${i.unit || ""}</td></tr>`).join("")}</tbody>
       </table></div>
-    </div>` : ""}`;
+    </div>` : ""}
+
+    <div class="card">
+      <h3>Championnat officiel (56 D1 Poule A)</h3>
+      <p class="view-sub">L'équipe première (Cléguer Stiren FC) suit le championnat officiel du District du Morbihan.</p>
+      <a class="btn btn-ghost btn-sm" href="https://live.newsouest.fr/sports/foot-district-56/division-1-a-" target="_blank">Voir le classement officiel en direct</a>
+    </div>`;
 }
 
 /* ---------------------------------------------------------------------
