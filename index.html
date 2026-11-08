@@ -384,12 +384,13 @@ async function renderMembers(main){
         <div class="field"><label>Nom</label><input name="last_name" required></div>
         <div class="field"><label>Contact parent</label><input name="parent_name"></div>
         <div class="field"><label>Email parent</label><input name="parent_email" type="email"></div>
+        <div class="field" style="flex:2 1 260px"><label>Lien de paiement SumUp</label><input name="payment_link" type="url" placeholder="collé depuis l'appli SumUp Business"></div>
         <button class="btn btn-primary" type="submit">Ajouter</button>
       </form>
     </div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Nom</th><th>Prénom</th><th>Statut licence</th><th>Contact parent</th></tr></thead>
+        <thead><tr><th>Nom</th><th>Prénom</th><th>Statut licence</th><th>Contact parent</th><th>Paiement</th></tr></thead>
         <tbody>
           ${state.members.length ? state.members.map(m => `
             <tr>
@@ -397,7 +398,8 @@ async function renderMembers(main){
               <td>${m.first_name}</td>
               <td>${statusPill(m.licence_status)}</td>
               <td>${m.parent_name || ""} ${m.parent_email ? "· " + m.parent_email : ""}</td>
-            </tr>`).join("") : `<tr class="empty-row"><td colspan="4">Aucun licencié pour l'instant.</td></tr>`}
+              <td>${m.payment_link ? `<a href="${m.payment_link}" target="_blank" class="btn btn-ghost btn-sm">Lien SumUp</a>` : ""}</td>
+            </tr>`).join("") : `<tr class="empty-row"><td colspan="5">Aucun licencié pour l'instant.</td></tr>`}
         </tbody>
       </table>
     </div>`;
@@ -411,6 +413,7 @@ async function renderMembers(main){
       last_name: fd.get("last_name"),
       parent_name: fd.get("parent_name") || null,
       parent_email: fd.get("parent_email") || null,
+      payment_link: fd.get("payment_link") || null,
     };
     const { error } = await sb.from("members").insert(payload);
     if (error) return alert(error.message);
