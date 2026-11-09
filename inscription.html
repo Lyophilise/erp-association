@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Inscription</title>
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@600;700&family=Karla:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<style>
+:root{
+  --bg:#F7F8F6; --surface:#FFFFFF; --border:#DCE3D8;
+  --fg:#15241B; --fg-muted:#5C6660; --accent:#2BAD6C; --accent-2:#249E60;
+  --danger:#B3261E; --danger-bg:#FAE3E1;
+  --font-display:'Rubik',sans-serif; --font-body:'Karla',sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font-body);min-height:100vh;display:flex;justify-content:center;padding:24px 16px}
+.wrap{width:100%;max-width:480px}
+h1{font-family:var(--font-display);font-size:22px;margin:0 0 4px}
+.sub{color:var(--fg-muted);font-size:14px;margin-bottom:18px;white-space:pre-wrap}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px;margin-bottom:16px}
+.field{margin-bottom:12px;display:flex;flex-direction:column;gap:4px}
+.field label{font-size:12px;font-weight:600;color:var(--fg-muted)}
+.field input{padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--fg);font-size:15px}
+button{width:100%;padding:12px;border-radius:9px;border:none;background:var(--accent);color:#fff;font-weight:700;font-size:15px;cursor:pointer}
+button:hover{background:var(--accent-2)}
+button:disabled{opacity:.5;cursor:default}
+.error{background:var(--danger-bg);color:var(--danger);padding:8px 12px;border-radius:8px;font-size:13px;margin-bottom:12px}
+.list h3{font-size:14px;margin:0 0 10px;color:var(--fg-muted);text-transform:uppercase;letter-spacing:.03em}
+.row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:14px}
+.row:last-child{border-bottom:none}
+.muted{color:var(--fg-muted);font-size:13px}
+.total{font-weight:700;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)}
+</style>
+</head>
+<body>
+<div class="wrap" id="root">Chargement…</div>
+
+<script>
+const SUPABASE_URL = "https://hmeovaorwozazltidhbh.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_orYGCskIBIPTK_cpQ-PiHg_-t5JtqCF";
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const eventId = new URLSearchParams(location.search).get("event");
+const root = document.getElementById("root");
+
+async function init(){
+  if (!eventId){
+    root.innerHTML = `<div class="card"><p>Lien d'inscription invalide (événement manquant).</p></div>`;
+    return;
+  }
+  const { data: event, error } = await sb.from("calendar_events").select("*").eq("id", eventId).maybeSingle();
+  if (error || !event || !event.registration_open){
+    root.innerHTML = `<div class="card"><p>Les inscriptions ne sont pas (ou plus) ouvertes pour cet événement.</p></div>`;
+    return;
+  }
+  render(event);
+}
+
+async function render(event){
+  const { data: regs } = await sb.from("event_registrations").select("*").eq("event_id", eventId).order("last_name");
+  const totalPeople = (regs || []).reduce((s, r) => s + r.people_count, 0);
+
+  root.innerHTML = `
+    <h1>${event.title}</h1>
+    <div class="sub">${new Date(event.start_at).toLocaleString('fr-FR', { dateStyle: 'full', timeStyle: 'short' })}${event.location ? ' · ' + event.location : ''}
+${event.registration_price ? `\nTarif : ${Number(event.registration_price).toFixed(2)} €/personne` : ''}${event.registration_deadline ? `\nInscriptions jusqu'au ${event.registration_deadline}` : ''}</div>
+    ${event.description ? `<div class="card"><p style="margin:0;white-space:pre-wrap;font-size:14px">${event.description}</p></div>` : ''}
+
+    <div class="card">
+      <div id="form-error"></div>
+      <form id="reg-form">
+        <div class="field"><label>Prénom</label><input name="first_name" required></div>
+        <div class="field"><label>Nom</label><input name="last_name" required></div>
+        <div class="field"><label>Nombre de personnes</label><input name="people_count" type="number" min="1" value="1" required></div>
+        <button type="submit">S'inscrire</button>
+      </form>
+    </div>
+
+    <div class="card list">
+      <h3>Déjà inscrits (${totalPeople} personne${totalPeople > 1 ? 's' : ''})</h3>
+      ${(regs || []).length ? regs.map(r => `
+        <div class="row"><span>${r.first_name} ${r.last_name}</span><span class="muted">${r.people_count} pers.</span></div>
+      `).join("") : `<p class="muted">Personne pour l'instant — sois le premier !</p>`}
+    </div>`;
+
+  document.getElementById("reg-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const btn = e.target.querySelector("button");
+    btn.disabled = true;
+    const { error } = await sb.from("event_registrations").insert({
+      organization_id: event.organization_id,
+      event_id: eventId,
+      first_name: fd.get("first_name"),
+      last_name: fd.get("last_name"),
+      people_count: Number(fd.get("people_count") || 1),
+    });
+    if (error){
+      document.getElementById("form-error").innerHTML = `<div class="error">${error.message}</div>`;
+      btn.disabled = false;
+      return;
+    }
+    render(event);
+  });
+}
+
+init();
+</script>
+</body>
+</html>

@@ -868,14 +868,16 @@ async function renderStaff(main){
 --------------------------------------------------------------------- */
 async function renderCalendar(main){
   main.innerHTML = `<div class="view-head"><h1>Calendrier, tournois & matériel</h1></div><div id="calendar-body">Chargement…</div>`;
-  const [{ data: cal, error: e1 }, { data: items, error: e2 }, { data: teams }, { data: convs }, { data: convPlayers }, { data: rentals }] = await Promise.all([
+  const [{ data: cal, error: e1 }, { data: items, error: e2 }, { data: teams }, { data: convs }, { data: convPlayers }, { data: rentals }, { data: regs }] = await Promise.all([
     sb.from("calendar_events").select("*, teams(name)").eq("organization_id", state.orgId).order("start_at"),
     sb.from("equipment_items").select("*").eq("organization_id", state.orgId).order("name"),
     sb.from("teams").select("id, name").eq("organization_id", state.orgId).order("name"),
     sb.from("convocations").select("*").eq("organization_id", state.orgId),
     sb.from("convocation_players").select("*, members(first_name, last_name)").eq("organization_id", state.orgId),
     sb.from("equipment_rentals").select("*, equipment_items(name)").eq("organization_id", state.orgId).order("start_date", { ascending: false }),
+    sb.from("event_registrations").select("*").eq("organization_id", state.orgId),
   ]);
+  const regsFor = eid => (regs || []).filter(r => r.event_id === eid);
   const body = document.getElementById("calendar-body");
   if (e1 || e2){ body.innerHTML = `<div class="auth-error">${(e1||e2).message}</div>`; return; }
 
@@ -890,7 +892,7 @@ async function renderCalendar(main){
       <form id="cal-form" class="form-grid">
         <div class="field"><label>Titre</label><input name="title" required></div>
         <div class="field"><label>Type</label>
-          <select name="type"><option value="match">Match</option><option value="entrainement">Entraînement</option><option value="tournoi">Tournoi</option><option value="reunion">Réunion</option><option value="ag">AG</option><option value="autre">Autre</option></select>
+          <select name="type"><option value="match">Match</option><option value="entrainement">Entraînement</option><option value="tournoi">Tournoi</option><option value="repas">Repas à emporter</option><option value="reunion">Réunion</option><option value="ag">AG</option><option value="autre">Autre</option></select>
         </div>
         <div class="field"><label>Équipe</label><select name="team_id"><option value="">—</option>${teamOptions}</select></div>
         <div class="field"><label>Date/heure</label><input name="start_at" type="datetime-local" required></div>
@@ -936,6 +938,34 @@ async function renderCalendar(main){
           </div>
           <button class="btn btn-ghost btn-sm send-convocation-btn" data-conv="${conv.id}" data-event="${c.id}">Envoyer la convocation par e-mail</button>
         ` : ""}
+        ${(() => { const rs = regsFor(c.id); const totalPeople = rs.reduce((s,r)=>s+r.people_count,0); const totalDue = rs.reduce((s,r)=>s + (c.registration_price||0)*r.people_count, 0); return `
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+          <div class="card-row">
+            <strong>Inscriptions (repas à emporter, etc.)</strong>
+            <button class="btn btn-ghost btn-sm toggle-registration-btn" data-id="${c.id}" data-open="${c.registration_open}">${c.registration_open ? "Fermer les inscriptions" : "Ouvrir les inscriptions"}</button>
+          </div>
+          ${c.registration_open ? `
+            <p class="view-sub">Lien public à partager (site, Facebook...) : <br><a href="inscription.html?event=${c.id}" target="_blank">${location.origin}${location.pathname.replace('index.html','')}inscription.html?event=${c.id}</a>
+              <button class="btn btn-ghost btn-sm copy-reg-link-btn" data-id="${c.id}">Copier</button>
+            </p>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Nom</th><th class="num">Pers.</th><th>Payé</th><th></th></tr></thead>
+                <tbody>
+                  ${rs.length ? rs.map(r => `
+                    <tr>
+                      <td>${r.first_name} ${r.last_name}</td>
+                      <td class="num">${r.people_count}</td>
+                      <td><input type="checkbox" class="reg-paid-check" data-id="${r.id}" ${r.paid ? "checked" : ""}></td>
+                      <td><button class="btn btn-ghost btn-sm del-reg-btn" data-id="${r.id}">🗑</button></td>
+                    </tr>
+                  `).join("") : `<tr class="empty-row"><td colspan="4">Personne inscrit encore.</td></tr>`}
+                </tbody>
+              </table>
+            </div>
+            <p class="view-sub"><strong>${totalPeople}</strong> personne(s)${c.registration_price ? ` · <strong>${totalDue.toFixed(2)} €</strong> attendus (${Number(c.registration_price).toFixed(2)} €/pers.)` : ""}</p>
+          ` : ""}
+        </div>`; })()}
       </div>`;
     }).join("") : `<div class="placeholder-card">Aucun événement pour l'instant.</div>`}
 
@@ -1100,6 +1130,48 @@ async function renderCalendar(main){
     btn.addEventListener("click", async () => {
       if (!confirm("Supprimer cet événement ?")) return;
       const { error } = await sb.from("calendar_events").delete().eq("id", btn.dataset.id);
+      if (error) return alert(error.message);
+      renderCalendar(main);
+    });
+  });
+
+  document.querySelectorAll(".toggle-registration-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const opening = btn.dataset.open !== "true";
+      let price = null, deadline = null;
+      if (opening){
+        price = prompt("Prix par personne (€) — laisser vide si gratuit :", "");
+        deadline = prompt("Date limite d'inscription (AAAA-MM-JJ) — laisser vide si aucune :", "");
+      }
+      const { error } = await sb.from("calendar_events").update({
+        registration_open: opening,
+        registration_price: price ? Number(price) : null,
+        registration_deadline: deadline || null,
+      }).eq("id", btn.dataset.id);
+      if (error) return alert(error.message);
+      renderCalendar(main);
+    });
+  });
+
+  document.querySelectorAll(".copy-reg-link-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const link = `${location.origin}${location.pathname.replace('index.html','')}inscription.html?event=${btn.dataset.id}`;
+      navigator.clipboard?.writeText(link).catch(() => {});
+      alert(`Lien copié :\n${link}`);
+    });
+  });
+
+  document.querySelectorAll(".reg-paid-check").forEach(chk => {
+    chk.addEventListener("change", async () => {
+      const { error } = await sb.from("event_registrations").update({ paid: chk.checked }).eq("id", chk.dataset.id);
+      if (error) return alert(error.message);
+    });
+  });
+
+  document.querySelectorAll(".del-reg-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      if (!confirm("Supprimer cette inscription ?")) return;
+      const { error } = await sb.from("event_registrations").delete().eq("id", btn.dataset.id);
       if (error) return alert(error.message);
       renderCalendar(main);
     });
